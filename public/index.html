@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FBM Operations Hub — Babaclick</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Inter',sans-serif;background:#060c18;color:#e2e8f0;line-height:1.6}
+    .container{max-width:1400px;margin:0 auto;padding:20px}
+    .card{background:rgba(30,58,95,0.2);border:1px solid rgba(96,165,250,0.2);border-radius:10px;padding:20px;margin-bottom:20px}
+    .btn{background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.3);color:#60a5fa;padding:10px 16px;border-radius:8px;cursor:pointer;fontWeight:700;fontSize:13}
+    .btn:hover{background:rgba(96,165,250,0.25)}
+    .btn-danger{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444}
+    .btn-success{background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e}
+    input,select{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px;width:100%}
+    input:focus,select:focus{outline:none;border-color:rgba(96,165,250,0.4)}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px 12px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.05)}
+    th{background:rgba(255,255,255,0.02);font-weight:700;text-transform:uppercase;font-size:10px;color:#334155}
+    .alert{padding:12px 16px;border-radius:8px;margin-bottom:15px;font-size:13px}
+    .alert-error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#fca5a5}
+    .alert-success{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#86efac}
+    .alert-info{background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);color:#93c5fd}
+    .form-group{margin-bottom:15px}
+    label{display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;text-transform:uppercase;font-weight:700}
+    .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;alignItems:center;justifyContent:center;zIndex:1000}
+    .modal{background:#0f1f35;border:1px solid rgba(96,165,250,0.2);border-radius:12px;padding:30px;max-width:500px;width:90%}
+    .modal h2{margin-bottom:20px;color:#f1f5f9}
+    .modal .btn{width:100%;margin-top:10px}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+const {useState, useEffect, useCallback} = React;
+
+const API = {
+  async request(endpoint, options = {}) {
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+      ...(token && {'Authorization': `Bearer ${token}`}),
+      ...(user.email && {'x-user-email': user.email})
+    };
+    
+    const res = await fetch(`/api${endpoint}`, {
+      ...options,
+      headers
+    });
+    
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Request failed');
+    }
+    
+    return res.json();
+  },
+  
+  auth: {
+    register: (email, name) => API.request('/auth/register', {method: 'POST', body: JSON.stringify({email, name})}),
+    login: (email) => API.request('/auth/login', {method: 'POST', body: JSON.stringify({email})}),
+  },
+  
+  admin: {
+    getPendingUsers: () => API.request('/admin/pending-users'),
+    approveUser: (email, role) => API.request('/admin/approve-user', {method: 'POST', body: JSON.stringify({email, role})}),
+  },
+  
+  audit: {
+    getAll: () => API.request('/audit-logs'),
+    add: (logData) => API.request('/audit-logs', {method: 'POST', body: JSON.stringify(logData)}),
+  },
+  
+  usage: {
+    getStats: () => API.request('/admin/usage-stats'),
+  }
+};
+
+// ═══ LOGIN SCREEN ═══
+function LoginScreen() {
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [isSignup, setIsSignup] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setMessage('');
+    
+    try {
+      const res = await API.auth.login(email);
+      localStorage.setItem('token', res.token);
+      localStorage.setItem('user', JSON.stringify(res.user));
+      window.location.reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setMessage('');
+    
+    try {
+      const res = await API.auth.register(email, name);
+      setMessage(res.message);
+      setEmail('');
+      setName('');
+      setTimeout(() => setIsSignup(false), 2000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{minHeight:'100vh', background:'linear-gradient(135deg, #060c18 0%, #0f1f35 100%)', display:'flex', alignItems:'center', justifyContent:'center', padding:'20px'}}>
+      <div style={{maxWidth:400, width:'100%'}}>
+        <div style={{textAlign:'center', marginBottom:40}}>
+          <div style={{fontSize:48, marginBottom:12}}>📦</div>
+          <h1 style={{fontSize:28, fontWeight:800, marginBottom:6, color:'#f1f5f9'}}>FBM Ops Hub</h1>
+          <p style={{color:'#64748b', fontSize:13}}>Babaclick UK→US Operations</p>
+        </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+        {message && <div className="alert alert-success">{message}</div>}
+
+        <form onSubmit={isSignup ? handleSignup : handleLogin} style={{background:'rgba(30,58,95,0.3)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:12, padding:24}}>
+          <h2 style={{marginBottom:20, fontSize:18, color:'#f1f5f9'}}>{isSignup ? 'Create Account' : 'Login'}</h2>
+          
+          <div className="form-group">
+            <label>Email</label>
+            <input type="email" placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)} required/>
+          </div>
+
+          {isSignup && (
+            <div className="form-group">
+              <label>Full Name</label>
+              <input type="text" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required/>
+            </div>
+          )}
+
+          <button type="submit" disabled={loading} className="btn" style={{width:'100%', marginTop:20}}>
+            {loading ? 'Processing...' : (isSignup ? 'Request Access' : 'Login')}
+          </button>
+
+          <button type="button" onClick={() => {setIsSignup(!isSignup); setError(''); setMessage('');}} style={{width:'100%', marginTop:10, background:'transparent', border:'1px solid rgba(255,255,255,0.1)', color:'#94a3b8'}}>
+            {isSignup ? 'Back to Login' : "Don't have an account? Sign up"}
+          </button>
+        </form>
+
+        <div style={{marginTop:30, padding:15, background:'rgba(96,165,250,0.05)', border:'1px solid rgba(96,165,250,0.1)', borderRadius:8}}>
+          <p style={{fontSize:12, color:'#64748b', lineHeight:1.6}}>
+            <strong>Demo Accounts:</strong><br/>
+            Email: <code style={{color:'#60a5fa'}}>owner@babaclick.com</code><br/>
+            (Admin approval required for access)
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══ ADMIN PANEL ═══
+function AdminPanel() {
+  const [pending, setPending] = useState([]);
+  const [usage, setUsage] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    loadPending();
+    loadUsage();
+  }, []);
+
+  const loadUsage = async () => {
+    try {
+      const res = await API.usage.getStats();
+      setUsage(res);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadPending = async () => {
+    setLoading(true);
+    try {
+      const res = await API.admin.getPendingUsers();
+      setPending(res.pending);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const approveUser = async (email, role) => {
+    try {
+      await API.admin.approveUser(email, role);
+      setMessage(`✓ Approved ${email} as ${role}`);
+      loadPending();
+      loadUsage();
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setMessage(`Error: ${err.message}`);
+    }
+  };
+
+  return (
+    <div className="container">
+      {/* Usage Dashboard */}
+      {usage && (
+        <div className="card" style={{background:'linear-gradient(135deg, rgba(34,197,94,0.1) 0%, rgba(96,165,250,0.1) 100%)', border:'1px solid rgba(34,197,94,0.3)', marginBottom:20}}>
+          <h2 style={{marginBottom:20, color:'#f1f5f9', display:'flex', gap:8, alignItems:'center'}}>💰 Google Cloud Usage (30 days)</h2>
+          
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:15, marginBottom:20}}>
+            <div style={{background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.3)', borderRadius:8, padding:15}}>
+              <div style={{fontSize:11, color:'#64748b', textTransform:'uppercase', fontWeight:700, marginBottom:6}}>Remaining Credits</div>
+              <div style={{fontSize:24, fontWeight:800, color:'#22c55e'}}>${usage.remaining_credits}</div>
+              <div style={{fontSize:10, color:'#94a3b8', marginTop:4}}>of $300 budget</div>
+            </div>
+            
+            <div style={{background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.3)', borderRadius:8, padding:15}}>
+              <div style={{fontSize:11, color:'#64748b', textTransform:'uppercase', fontWeight:700, marginBottom:6}}>Used This Month</div>
+              <div style={{fontSize:24, fontWeight:800, color:'#60a5fa'}}>${usage.total_cost}</div>
+              <div style={{fontSize:10, color:'#94a3b8', marginTop:4}}>({usage.period})</div>
+            </div>
+            
+            <div style={{background:'rgba(251,191,36,0.1)', border:'1px solid rgba(251,191,36,0.3)', borderRadius:8, padding:15}}>
+              <div style={{fontSize:11, color:'#64748b', textTransform:'uppercase', fontWeight:700, marginBottom:6}}>Sheet Writes</div>
+              <div style={{fontSize:24, fontWeight:800, color:'#fbbf24'}}>{usage.sheets_writes}</div>
+              <div style={{fontSize:10, color:'#94a3b8', marginTop:4}}>API calls</div>
+            </div>
+            
+            <div style={{background:'rgba(167,139,250,0.1)', border:'1px solid rgba(167,139,250,0.3)', borderRadius:8, padding:15}}>
+              <div style={{fontSize:11, color:'#64748b', textTransform:'uppercase', fontWeight:700, marginBottom:6}}>Firebase Ops</div>
+              <div style={{fontSize:24, fontWeight:800, color:'#a78bfa'}}>{usage.firebase_ops}</div>
+              <div style={{fontSize:10, color:'#94a3b8', marginTop:4}}>operations (free)</div>
+            </div>
+          </div>
+          
+          <div style={{background:'rgba(34,197,94,0.05)', border:'1px solid rgba(34,197,94,0.2)', borderRadius:8, padding:12}}>
+            <p style={{fontSize:12, color:'#64748b', lineHeight:1.6}}>
+              ✅ <strong>Good news!</strong> At your current usage rate, the $300 credit budget will last <strong>several years</strong>. 
+              Firebase operations are free. Only Sheet writes (~$0.000006 each) consume credits.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* User Approvals */}
+      <div className="card">
+        <h2 style={{marginBottom:20, color:'#f1f5f9'}}>👨‍💼 Approve New Users</h2>
+        
+        {message && <div className="alert alert-success">{message}</div>}
+
+        {pending.length === 0 ? (
+          <p style={{color:'#64748b'}}>No pending approvals</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Requested</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map(user => (
+                <tr key={user.email}>
+                  <td style={{color:'#f1f5f9'}}>{user.name}</td>
+                  <td style={{color:'#60a5fa', fontFamily:'monospace'}}>{user.email}</td>
+                  <td style={{color:'#94a3b8', fontSize:12}}>{new Date(user.createdAt).toLocaleDateString()}</td>
+                  <td>
+                    <select onChange={e => e.target.value && approveUser(user.email, e.target.value)} defaultValue="">
+                      <option value="">Assign Role...</option>
+                      <option value="owner">👨‍💼 Owner</option>
+                      <option value="importer">📥 Importer</option>
+                      <option value="packer">📦 Packer</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══ MAIN APP ═══
+function App() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('user');
+    if (stored) {
+      setUser(JSON.parse(stored));
+    }
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return <div style={{minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#060c18'}}><p>Loading...</p></div>;
+  }
+
+  if (!user) {
+    return <LoginScreen/>;
+  }
+
+  return (
+    <div style={{minHeight:'100vh', background:'#060c18'}}>
+      {/* Top Bar */}
+      <div style={{borderBottom:'1px solid rgba(255,255,255,0.06)', background:'rgba(6,12,24,0.95)', backdropFilter:'blur(10px)', padding:'0 20px', height:58, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <div>
+          <h1 style={{fontSize:14, fontWeight:800, color:'#f1f5f9'}}>📦 FBM Ops Hub</h1>
+          <p style={{fontSize:8, color:'#1e3a5f', textTransform:'uppercase'}}>Logged in as {user.name} ({user.role})</p>
+        </div>
+        <button onClick={() => {localStorage.clear(); window.location.reload();}} className="btn">Logout</button>
+      </div>
+
+      {/* Content */}
+      <div className="container">
+        {user.role === 'owner' && <AdminPanel/>}
+        
+        <div className="card">
+          <h2 style={{marginBottom:10}}>Welcome, {user.name}!</h2>
+          <p style={{color:'#64748b'}}>Your role: <strong style={{color:'#60a5fa'}}>{user.role}</strong></p>
+          <p style={{marginTop:15, color:'#94a3b8', fontSize:13}}>Dashboard and operations panel coming soon. This is the authenticated app shell.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
+  </script>
+</body>
+</html>
