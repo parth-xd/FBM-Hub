@@ -15,9 +15,13 @@ app.use(cors());
 app.use(express.json({limit: '50mb'}));
 app.use(express.static('public'));
 
-// ═══ IN-MEMORY DATA STORE (Demo Mode) ═══
-const users = new Map();
-const pendingApprovals = new Map();
+// ═══ IN-MEMORY DATA STORE ═══
+const users = new Map(); // {email: {email, name, role, status, createdAt}}
+const pendingApprovals = new Map(); // {token: {email, name, role, createdAt}}
+const loginTokens = new Map(); // {token: {email, expires, used}}
+
+const OWNER_EMAIL = 'parttthh@gmail.com';
+const crypto = require('crypto');
 // ═══ EMAIL SERVICE ═══
 const sendEmail = async (to, subject, html) => {
   try {
@@ -76,195 +80,248 @@ const authenticate = (req, res, next) => {
   next();
 };
 
-// Register
-app.post('/api/auth/register', async (req, res) => {
-  const { email, password, name } = req.body;
+// ═══ NEW AUTH ENDPOINTS (Email-based Signup & Approval) ═══
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
-  }
+// Signup endpoint (new users request access)
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const {email, name, role} = req.body;
+    if (!email || !name || !role) {
+      return res.status(400).json({error: 'Email, name, and role required'});
+    }
 
-  if (users.has(email)) {
-    return res.status(400).json({ error: 'User already exists' });
-  }
+    const emailLower = email.toLowerCase();
+    
+    // Check if user already exists
+    if (users.has(emailLower)) {
+      const user = users.get(emailLower);
+      if (user.status === 'pending_approval') {
+        return res.json({message: 'Your signup is already pending approval', status: 'pending'});
+      }
+    }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const userId = Math.random().toString(36).substring(7);
+    // Create pending user
+    users.set(emailLower, {
+      email: emailLower,
+      name: name,
+      role: role,
+      status: 'pending_approval',
+      createdAt: new Date().toISOString()
+    });
 
-  users.set(email, {
-    id: userId,
-    email,
-    password: hashedPassword,
-    name: name || email,
-    role: 'user',
-    approved: false,
-    createdAt: new Date().toISOString(),
-  });
+    // Create approval token
+    const approvalToken = crypto.randomBytes(32).toString('hex');
+    pendingApprovals.set(approvalToken, {email: emailLower, name, role, createdAt: new Date().toISOString()});
 
-  pendingApprovals.set(email, {
-    email,
-    name: name || email,
-    requestedAt: new Date().toISOString(),
-  });
+    // Send approval request email to owner
+    const approveUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/approve?token=${approvalToken}`;
+    const rejectUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/reject?token=${approvalToken}`;
 
-  // Send verification email
-  await sendEmail(
-    email,
-    'Welcome to Babaclick FBM Hub - Pending Admin Approval',
-    `
-    <h2>Welcome, ${name || email}!</h2>
-    <p>Your account has been created and is pending admin approval.</p>
-    <p>You'll receive an email once an administrator approves your access.</p>
-    <p>Thank you!</p>
-    `
-  );
-
-  // Notify admin
-  if (process.env.ADMIN_EMAIL) {
     await sendEmail(
-      process.env.ADMIN_EMAIL,
-      'New User Pending Approval',
-      `<p><strong>${name || email}</strong> (${email}) has registered and needs approval.</p>`
-    );
-  }
+      process.env.EMAIL_ADMIN_RECIPIENTS || OWNER_EMAIL,
+      `👤 New User Signup Request: ${name}`,
+      `
+        <h3>New User Signup Request</h3>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${emailLower}</p>
+        <p><strong>Requested Role:</strong> ${role.toUpperCase()}</p>
+        <p><strong>Status:</strong> ⏳ Pending Your Approval</p>
+        <hr>
+        <p>
+          <a href="${approveUrl}" style="background:#10b981;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;margin-right:10px;font-weight:bold;">✅ Approve</a>
+          <a href="${rejectUrl}" style="background:#ef4444;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">❌ Reject</a>
+        </p>
+      `
+    ).catch(err => console.error('Email error:', err));
 
-  res.json({ message: '✅ Registration successful. Pending admin approval.' });
+    return res.json({message: 'Signup request sent. Awaiting admin approval.', status: 'pending'});
+  } catch (error) {
+    console.error('Signup error:', error);
+    res.status(500).json({error: 'Server error'});
+  }
 });
 
-// Login
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+// Send login email (for existing approved users)
+app.post('/api/auth/send-login-email', async (req, res) => {
+  try {
+    const {email} = req.body;
+    if (!email) return res.status(400).json({error: 'Email required'});
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
+    const emailLower = email.toLowerCase();
+    
+    // Owner auto-login
+    if (emailLower === OWNER_EMAIL) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = Math.floor(Date.now() / 1000) + (15 * 60);
+      loginTokens.set(token, {email: emailLower, expires, used: false});
+      const loginUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}?token=${token}`;
+      
+      await sendEmail(
+        emailLower,
+        '🔐 Your FBM Ops Hub Login Link (Owner)',
+        `<p>Click below to login as <strong>Owner</strong> (link expires in 15 minutes):</p>
+               <p><a href="${loginUrl}" style="background:#3b82f6;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">Login to FBM Ops Hub</a></p>`
+      ).catch(err => console.error('Email error:', err));
+      
+      return res.json({message: 'Login link sent to email', status: 'sent'});
+    }
+
+    // Check if user exists
+    const user = users.get(emailLower);
+    
+    if (!user) {
+      return res.status(404).json({error: 'User not found. Please sign up first.'});
+    }
+
+    if (user.status === 'pending_approval') {
+      return res.json({message: 'Your account is awaiting admin approval', status: 'pending'});
+    }
+
+    if (user.status === 'rejected') {
+      return res.status(403).json({error: 'Access denied. Contact your administrator.'});
+    }
+
+    // Approved user - send login link
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = Math.floor(Date.now() / 1000) + (15 * 60);
+    loginTokens.set(token, {email: emailLower, expires, used: false});
+    
+    const loginUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}?token=${token}`;
+
+    await sendEmail(
+      emailLower,
+      `🔐 Your FBM Ops Hub Login Link (${user.role})`,
+      `<p>Click below to login as <strong>${user.role.toUpperCase()}</strong> (link expires in 15 minutes):</p>
+             <p><a href="${loginUrl}" style="background:#10b981;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">Login to FBM Ops Hub</a></p>`
+    ).catch(err => console.error('Email error:', err));
+
+    res.json({message: 'Login link sent to email', status: 'sent'});
+  } catch (error) {
+    console.error('Login email error:', error);
+    res.status(500).json({error: 'Server error'});
   }
-
-  const user = users.get(email);
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  const validPassword = await bcrypt.compare(password, user.password);
-  if (!validPassword) {
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  if (!user.approved) {
-    return res.status(403).json({ error: 'Account pending admin approval' });
-  }
-
-  const token = generateToken(email, user.role);
-  res.json({
-    message: '✅ Login successful',
-    token,
-    user: { email: user.email, name: user.name, role: user.role },
-  });
 });
 
-// Get pending approvals (admin only)
-app.get('/api/admin/pending-approvals', authenticate, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin only' });
-  }
+// Verify login token
+app.post('/api/auth/verify-token', async (req, res) => {
+  try {
+    const {token} = req.body;
+    if (!token) return res.status(400).json({error: 'Token required'});
 
-  const pending = Array.from(pendingApprovals.values());
-  res.json({ pending });
+    const tokenData = loginTokens.get(token);
+
+    if (!tokenData) {
+      return res.status(401).json({error: 'Invalid token'});
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+
+    if (tokenData.used || tokenData.expires < now) {
+      return res.status(401).json({error: 'Token expired or already used'});
+    }
+
+    // Mark token as used
+    tokenData.used = true;
+
+    // Get user data
+    const user = users.get(tokenData.email);
+
+    if (tokenData.email === OWNER_EMAIL) {
+      res.json({
+        sessionToken: token,
+        user: {
+          email: OWNER_EMAIL,
+          name: 'Parth Sharma',
+          role: 'owner',
+          id: OWNER_EMAIL
+        }
+      });
+      return;
+    }
+
+    if (!user || user.status !== 'approved') {
+      return res.status(403).json({error: 'User not approved'});
+    }
+
+    res.json({
+      sessionToken: token,
+      user: {
+        email: tokenData.email,
+        name: user.name,
+        role: user.role,
+        id: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Verify token error:', error);
+    res.status(500).json({error: 'Server error'});
+  }
 });
 
-// Approve user (admin only)
-app.post('/api/admin/approve/:email', authenticate, async (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin only' });
+// Approve user endpoint
+app.get('/api/auth/approve', async (req, res) => {
+  try {
+    const {token} = req.query;
+    if (!token || !pendingApprovals.has(token)) {
+      return res.status(400).json({error: 'Invalid approval token'});
+    }
+
+    const {email, name, role} = pendingApprovals.get(token);
+    pendingApprovals.delete(token);
+
+    // Update user status
+    users.set(email, {
+      email, name, role,
+      status: 'approved',
+      approvedAt: new Date().toISOString()
+    });
+
+    // Send approval confirmation email
+    await sendEmail(
+      email,
+      '✅ Your FBM Ops Hub Account Approved!',
+      `<h3>Welcome to FBM Ops Hub!</h3>
+        <p>Your account has been approved as a <strong>${role.toUpperCase()}</strong>.</p>
+        <p>You can now log in with your email on the dashboard.</p>`
+    ).catch(err => console.error('Email error:', err));
+
+    res.json({message: 'User approved successfully'});
+  } catch (error) {
+    console.error('Approval error:', error);
+    res.status(500).json({error: 'Server error'});
   }
-
-  const { email } = req.params;
-  const user = users.get(email);
-
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-
-  user.approved = true;
-  user.role = 'user';
-  pendingApprovals.delete(email);
-
-  await sendEmail(
-    email,
-    '✅ Your Account Has Been Approved!',
-    `
-    <h2>Great news, ${user.name}!</h2>
-    <p>Your account has been approved by an administrator.</p>
-    <p>You can now login at: <a href="${process.env.FRONTEND_URL || 'https://babaclick-hub.com'}">FBM Operations Hub</a></p>
-    `
-  );
-
-  res.json({ message: '✅ User approved' });
 });
 
-// Reject user (admin only)
-app.post('/api/admin/reject/:email', authenticate, async (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin only' });
+// Reject user endpoint
+app.get('/api/auth/reject', async (req, res) => {
+  try {
+    const {token} = req.query;
+    if (!token || !pendingApprovals.has(token)) {
+      return res.status(400).json({error: 'Invalid rejection token'});
+    }
+
+    const {email} = pendingApprovals.get(token);
+    pendingApprovals.delete(token);
+
+    // Update user status
+    users.set(email, {
+      email,
+      status: 'rejected',
+      rejectedAt: new Date().toISOString()
+    });
+
+    // Send rejection email
+    await sendEmail(
+      email,
+      '❌ Your FBM Ops Hub Signup Request',
+      `<p>Your signup request has been rejected. Contact the administrator if you have questions.</p>`
+    ).catch(err => console.error('Email error:', err));
+
+    res.json({message: 'User rejected successfully'});
+  } catch (error) {
+    console.error('Rejection error:', error);
+    res.status(500).json({error: 'Server error'});
   }
-
-  const { email } = req.params;
-  users.delete(email);
-  pendingApprovals.delete(email);
-
-  await sendEmail(
-    email,
-    'Account Request Rejected',
-    '<p>Your account request has been rejected. Please contact support for details.</p>'
-  );
-
-  res.json({ message: '✅ User rejected' });
-});
-
-// Get user profile
-app.get('/api/auth/profile', authenticate, (req, res) => {
-  const user = users.get(req.user.email);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  res.json({
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    approved: user.approved,
-    createdAt: user.createdAt,
-  });
-});
-
-// Create admin account (first time only)
-app.post('/api/auth/create-admin', async (req, res) => {
-  const { email, password, name } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password required' });
-  }
-
-  if (Array.from(users.values()).some(u => u.role === 'admin')) {
-    return res.status(403).json({ error: 'Admin already exists' });
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const userId = Math.random().toString(36).substring(7);
-
-  users.set(email, {
-    id: userId,
-    email,
-    password: hashedPassword,
-    name: name || 'Admin',
-    role: 'admin',
-    approved: true,
-    createdAt: new Date().toISOString(),
-  });
-
-  const token = generateToken(email, 'admin');
-  res.json({
-    message: '✅ Admin account created',
-    token,
-    user: { email, name: name || 'Admin', role: 'admin' },
-  });
 });
 
 // ═══ HEALTH CHECK ═══
