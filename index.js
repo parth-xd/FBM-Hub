@@ -31,7 +31,7 @@ const sendEmail = async (to, subject, html) => {
   }
   try {
     const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'parttthh@gmail.com',
+      from: process.env.EMAIL_FROM || 'Babaclick <onboarding@resend.dev>',
       to,
       subject,
       html
