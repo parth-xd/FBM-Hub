@@ -11,3 +11,4 @@ build/
 *.swo
 *~
 .env.*.local
+credentials/
