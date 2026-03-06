@@ -619,7 +619,10 @@ function SetupWizard({onDone,onDemo}) {
 
 /* ═══ LOGIN ═══ */
 function LoginScreen({onLogin}) {
+  const [mode, setMode] = React.useState('login'); // 'login' | 'signup'
   const [email, setEmail] = React.useState('');
+  const [name, setName] = React.useState('');
+  const [role, setRole] = React.useState('importer');
   const [status, setStatus] = React.useState(''); // 'sending', 'sent', 'pending', 'error'
   const [message, setMessage] = React.useState('');
   const [token, setToken] = React.useState(new URLSearchParams(window.location.search).get('token') || '');
@@ -637,7 +640,7 @@ function LoginScreen({onLogin}) {
     e.preventDefault();
     if (!email) return;
 
-    // ⚡ DEMO LOGIN - for testing without Firebase
+    // ⚡ OWNER AUTO-LOGIN
     if (email.toLowerCase() === 'parttthh@gmail.com') {
       const demoUser = {
         email: email.toLowerCase(),
@@ -658,7 +661,7 @@ function LoginScreen({onLogin}) {
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const timeout = setTimeout(() => controller.abort(), 10000);
       
       const res = await fetch(`${window.API_BASE}/api/auth/send-login-email`, {
         method: 'POST',
@@ -668,7 +671,6 @@ function LoginScreen({onLogin}) {
       });
       
       clearTimeout(timeout);
-
       const data = await res.json();
 
       if (!res.ok) {
@@ -686,11 +688,54 @@ function LoginScreen({onLogin}) {
       }
     } catch (error) {
       setStatus('error');
-      if (error.name === 'AbortError') {
-        setMessage('Server not responding. Try demo login: parttthh@gmail.com');
-      } else {
-        setMessage('Error: ' + error.message);
+      setMessage(error.name === 'AbortError' ? 'Server not responding' : 'Error: ' + error.message);
+    }
+  }
+
+  async function handleSignup(e) {
+    e.preventDefault();
+    if (!email || !name || !role) {
+      setStatus('error');
+      setMessage('Fill all fields');
+      return;
+    }
+
+    setStatus('sending');
+    setMessage('');
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      
+      const res = await fetch(`${window.API_BASE}/api/auth/signup`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email, name, role}),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeout);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setStatus('error');
+        setMessage(data.error || 'Signup failed');
+        return;
       }
+
+      setStatus('pending');
+      setMessage('✓ Signup request sent! Awaiting admin approval.');
+      setTimeout(() => {
+        setMode('login');
+        setEmail('');
+        setName('');
+        setRole('importer');
+        setStatus('');
+        setMessage('');
+      }, 3000);
+    } catch (error) {
+      setStatus('error');
+      setMessage(error.name === 'AbortError' ? 'Server not responding' : 'Error: ' + error.message);
     }
   }
 
@@ -708,7 +753,6 @@ function LoginScreen({onLogin}) {
       });
       
       clearTimeout(timeout);
-
       const data = await res.json();
 
       if (!res.ok) {
@@ -717,7 +761,6 @@ function LoginScreen({onLogin}) {
         return;
       }
 
-      // Successfully verified - log in user
       window.CURRENT_USER = data.user;
       window.SESSION_TOKEN = data.sessionToken;
       localStorage.setItem('sessionToken', data.sessionToken);
@@ -726,25 +769,15 @@ function LoginScreen({onLogin}) {
       onLogin(data.user);
     } catch (error) {
       setStatus('error');
-      if (error.name === 'AbortError') {
-        setMessage('Server not responding. Please try again.');
-      } else {
-        setMessage('Error: ' + error.message);
-      }
+      setMessage(error.name === 'AbortError' ? 'Server not responding' : 'Error: ' + error.message);
     }
   }
 
-  // Extract sheet ID from URL or plain ID
   const extractSheetId = (input) => {
     if (!input) return null;
-    
-    // If it's a full URL like https://docs.google.com/spreadsheets/d/1abc2def/edit
     const urlMatch = input.match(/\/d\/([a-zA-Z0-9-_]+)/);
     if (urlMatch) return urlMatch[1];
-    
-    // If it's already an ID
     if (input.match(/^[a-zA-Z0-9-_]+$/)) return input;
-    
     return null;
   };
 
@@ -814,7 +847,34 @@ function LoginScreen({onLogin}) {
 
         {/* Login Card */}
         <div className="card" style={{padding:28}}>
-          {!token && !status && (
+          {/* Mode Tabs */}
+          <div style={{display:'flex', gap:12, marginBottom:20, borderBottom:'1px solid rgba(255,255,255,0.1)', paddingBottom:12}}>
+            <button
+              onClick={() => {setMode('login'); setStatus(''); setMessage('');}}
+              style={{
+                background:'none', border:'none', color: mode === 'login' ? '#60a5fa' : '#475569',
+                padding:'8px 12px', cursor:'pointer', fontSize:13, fontWeight:700,
+                borderBottom: mode === 'login' ? '2px solid #60a5fa' : 'none',
+                transition:'all 0.2s'
+              }}
+            >
+              🔐 Login
+            </button>
+            <button
+              onClick={() => {setMode('signup'); setStatus(''); setMessage('');}}
+              style={{
+                background:'none', border:'none', color: mode === 'signup' ? '#60a5fa' : '#475569',
+                padding:'8px 12px', cursor:'pointer', fontSize:13, fontWeight:700,
+                borderBottom: mode === 'signup' ? '2px solid #60a5fa' : 'none',
+                transition:'all 0.2s'
+              }}
+            >
+              📝 Sign Up
+            </button>
+          </div>
+
+          {/* LOGIN MODE */}
+          {mode === 'login' && !token && !status && (
             <>
               <div style={{marginBottom:18}}>
                 <div style={{color:'#94a3b8', fontSize:12, marginBottom:2}}>Sign in with email</div>
@@ -864,12 +924,68 @@ function LoginScreen({onLogin}) {
 
               {/* Demo Login Hint */}
               <div style={{marginTop:16, padding:12, background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.3)', borderRadius:8}}>
-                <div style={{fontSize:11, color:'#60a5fa', fontWeight:700, marginBottom:4}}>⚡ Demo Mode</div>
+                <div style={{fontSize:11, color:'#60a5fa', fontWeight:700, marginBottom:4}}>⚡ Owner Access</div>
                 <div style={{fontSize:10, color:'#94a3b8', lineHeight:1.5}}>
                   Try: <span style={{fontFamily:'monospace', color:'#60a5fa', fontWeight:600}}>parttthh@gmail.com</span>
-                  <br/>to see the dashboard
                 </div>
               </div>
+            </>
+          )}
+
+          {/* SIGNUP MODE */}
+          {mode === 'signup' && !token && !status && (
+            <>
+              <div style={{marginBottom:18}}>
+                <div style={{color:'#94a3b8', fontSize:12, marginBottom:2}}>Create your account</div>
+                <div style={{color:'#1e3a5f', fontSize:11}}>Requires admin approval after signup</div>
+              </div>
+
+              <form onSubmit={handleSignup} style={{display:'flex', flexDirection:'column', gap:12}}>
+                <input 
+                  type="email"
+                  autoFocus
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="your.email@company.com"
+                  style={{background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#e2e8f0', padding:'12px 16px', fontSize:14, outline:'none'}}
+                />
+                <input 
+                  type="text"
+                  required
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Full name"
+                  style={{background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#e2e8f0', padding:'12px 16px', fontSize:14, outline:'none'}}
+                />
+                <select 
+                  required
+                  value={role}
+                  onChange={e => setRole(e.target.value)}
+                  style={{background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#e2e8f0', padding:'12px 16px', fontSize:14, outline:'none', cursor:'pointer'}}
+                >
+                  <option value="importer">Importer - Can edit all fields (except Order ID)</option>
+                  <option value="packer">Packer - Can edit weight, qty, labels only</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={status === 'sending' || !email || !name}
+                  style={{
+                    background: status === 'sending' ? 'rgba(16,185,129,0.2)' : '#10b981',
+                    color: status === 'sending' ? '#10b981' : '#fff',
+                    border:'none',
+                    borderRadius:8,
+                    padding:'12px 16px',
+                    fontSize:14,
+                    fontWeight:700,
+                    cursor: status === 'sending' || !email || !name ? 'not-allowed' : 'pointer',
+                    opacity: status === 'sending' || !email || !name ? 0.6 : 1,
+                    transition:'all 0.2s'
+                  }}
+                >
+                  {status === 'sending' ? '⟳ Sending...' : 'Request Access'}
+                </button>
+              </form>
             </>
           )}
 
@@ -894,10 +1010,10 @@ function LoginScreen({onLogin}) {
               <div style={{fontSize:24, marginBottom:12}}>⏳</div>
               <div style={{color:'#fbbf24', fontSize:14, fontWeight:700, marginBottom:8}}>Awaiting Approval</div>
               <div style={{color:'#94a3b8', fontSize:12, lineHeight:1.6}}>
-                Your account has been created and is awaiting admin approval. You'll receive an email when approved.
+                Your {mode === 'signup' ? 'signup request' : 'account'} is awaiting admin approval. You'll receive an email when approved.
               </div>
               <button
-                onClick={() => {setStatus(''); setEmail(''); setMessage('');}}
+                onClick={() => {setStatus(''); setEmail(''); setName(''); setMessage(''); setMode('login');}}
                 style={{marginTop:16, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#94a3b8', padding:'8px 16px', cursor:'pointer', fontSize:12}}
               >
                 Try another email
@@ -911,7 +1027,7 @@ function LoginScreen({onLogin}) {
               <div style={{color:'#ef4444', fontSize:14, fontWeight:700, marginBottom:8}}>Error</div>
               <div style={{color:'#94a3b8', fontSize:12, lineHeight:1.6, marginBottom:16}}>{message}</div>
               <button
-                onClick={() => {setStatus(''); setEmail(''); setMessage('');}}
+                onClick={() => {setStatus(''); setEmail(''); setName(''); setMessage('');}}
                 style={{background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, color:'#94a3b8', padding:'8px 16px', cursor:'pointer', fontSize:12}}
               >
                 Try again

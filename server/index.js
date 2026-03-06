@@ -49,6 +49,14 @@ app.use(express.static(__dirname));
 
 const DEFAULT_RANGE = 'Main STB Expenses!A3:AN';
 
+// ═══ IN-MEMORY USER DATABASE ═══
+const USERS = new Map(); // {email: {email, name, role, status, createdAt}}
+const PENDING_APPROVALS = new Map(); // {token: {email, name, role, createdAt}}
+const LOGIN_TOKENS = new Map(); // {token: {email, expires, used, createdAt}}
+
+// Owner email
+const OWNER_EMAIL = 'parttthh@gmail.com';
+
 // ═══ HEALTH CHECK & BASIC ENDPOINTS ═══
 app.get('/health', (req, res) => res.json({ok: true, service: 'fbm-ops'}));
 
@@ -312,90 +320,200 @@ app.post('/api/shipstation/fulfill-order', async (req, res) => {
 
 // ═══ AUTHENTICATION ENDPOINTS ═══
 
-// Send login email
+// Send login email (for existing approved users)
 app.post('/api/auth/send-login-email', async (req, res) => {
   try {
-    if (!db) return res.status(503).json({error: 'Auth service unavailable'});
-
     const {email} = req.body;
     if (!email) return res.status(400).json({error: 'Email required'});
 
     const emailLower = email.toLowerCase();
-    const usersRef = db.collection('users');
-    const userDoc = await usersRef.doc(emailLower).get();
-
-    if (!userDoc.exists) {
-      // New user - create pending approval request
-      await usersRef.doc(emailLower).set({
-        email: emailLower,
-        status: 'pending_approval',
-        createdAt: new Date(),
-        role: null,
-        name: null
-      });
+    
+    // Owner auto-login
+    if (emailLower === OWNER_EMAIL) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = Math.floor(Date.now() / 1000) + (15 * 60);
+      LOGIN_TOKENS.set(token, {email: emailLower, expires, used: false});
+      const loginUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:3000'}?token=${token}`;
       
-      // Send admin notification email
-      if (process.env.ADMIN_EMAIL) {
-        await transporter.sendMail({
-          from: process.env.GMAIL_USER,
-          to: process.env.ADMIN_EMAIL,
-          subject: `🔔 New User Signup: ${emailLower}`,
-          html: `<p>New user <strong>${emailLower}</strong> is awaiting approval.</p>
-                 <p>Visit the admin panel to approve or reject.</p>`
-        }).catch(err => console.error('Email error:', err));
-      }
-
-      return res.json({ 
-        message: 'Account created. Awaiting admin approval.',
-        status: 'pending'
-      });
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: emailLower,
+        subject: '🔐 Your FBM Ops Hub Login Link (Owner)',
+        html: `<p>Click below to login as <strong>Owner</strong> (link expires in 15 minutes):</p>
+               <p><a href="${loginUrl}" style="background:#3b82f6;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">Login to FBM Ops Hub</a></p>`
+      }).catch(err => console.error('Email error:', err));
+      
+      return res.json({message: 'Login link sent to email', status: 'sent'});
     }
 
-    const user = userDoc.data();
+    // Check if user exists
+    const user = USERS.get(emailLower);
     
+    if (!user) {
+      // User doesn't exist - shouldn't get here (should signup first)
+      return res.status(404).json({error: 'User not found. Please sign up first.'});
+    }
+
     if (user.status === 'pending_approval') {
-      return res.json({ 
-        message: 'Your account is awaiting admin approval',
-        status: 'pending'
-      });
+      return res.json({message: 'Your account is awaiting admin approval', status: 'pending'});
     }
 
     if (user.status === 'rejected') {
-      return res.status(403).json({ 
-        error: 'Access denied. Contact your administrator.'
-      });
+      return res.status(403).json({error: 'Access denied. Contact your administrator.'});
     }
 
-    // Existing approved user - create login token
+    // Approved user - send login link
     const token = crypto.randomBytes(32).toString('hex');
-    const expires = Math.floor(Date.now() / 1000) + (15 * 60); // 15 min
+    const expires = Math.floor(Date.now() / 1000) + (15 * 60);
+    LOGIN_TOKENS.set(token, {email: emailLower, expires, used: false});
     
-    await db.collection('login_tokens').doc(token).set({
-      email: emailLower,
-      expires,
-      used: false,
-      createdAt: new Date()
-    });
+    const loginUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:3000'}?token=${token}`;
 
-    const loginUrl = `${process.env.FRONTEND_URL}?token=${token}`;
-
-    // Send login email
     await transporter.sendMail({
-      from: process.env.GMAIL_USER,
+      from: process.env.EMAIL_USER,
       to: emailLower,
-      subject: '🔐 Your FBM Ops Hub Login Link',
-      html: `<p>Click below to login (link expires in 15 minutes):</p>
-             <p><a href="${loginUrl}"><strong>Login to FBM Ops Hub</strong></a></p>
-             <p>Link: ${loginUrl}</p>`
+      subject: `🔐 Your FBM Ops Hub Login Link (${user.role})`,
+      html: `<p>Click below to login as <strong>${user.role.toUpperCase()}</strong> (link expires in 15 minutes):</p>
+             <p><a href="${loginUrl}" style="background:#10b981;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">Login to FBM Ops Hub</a></p>`
     }).catch(err => console.error('Email error:', err));
 
-    res.json({ 
-      message: 'Login link sent to email',
-      status: 'sent',
-      debug: process.env.DEBUG === 'true' ? {token, loginUrl} : undefined
-    });
+    res.json({message: 'Login link sent to email', status: 'sent'});
   } catch (error) {
     console.error('Login email error:', error);
+    res.status(500).json({error: 'Server error'});
+  }
+});
+
+// Signup endpoint (new users request access)
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const {email, name, role} = req.body;
+    if (!email || !name || !role) {
+      return res.status(400).json({error: 'Email, name, and role required'});
+    }
+
+    const emailLower = email.toLowerCase();
+    
+    // Check if user already exists
+    if (USERS.has(emailLower)) {
+      const user = USERS.get(emailLower);
+      if (user.status === 'pending_approval') {
+        return res.json({message: 'Your signup is already pending approval', status: 'pending'});
+      } else if (user.status === 'approved') {
+        return res.status(400).json({error: 'User already exists. Use login instead.'});
+      }
+    }
+
+    // Create pending user
+    USERS.set(emailLower, {
+      email: emailLower,
+      name: name,
+      role: role,
+      status: 'pending_approval',
+      createdAt: new Date().toISOString()
+    });
+
+    // Send approval request email to owner
+    const approvalToken = crypto.randomBytes(32).toString('hex');
+    PENDING_APPROVALS.set(approvalToken, {email: emailLower, name, role, createdAt: new Date().toISOString()});
+
+    const approveUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:3000'}/api/auth/approve?token=${approvalToken}`;
+    const rejectUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:3000'}/api/auth/reject?token=${approvalToken}`;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: process.env.EMAIL_ADMIN_RECIPIENTS || OWNER_EMAIL,
+      subject: `👤 New User Signup Request: ${name}`,
+      html: `
+        <h3>New User Signup Request</h3>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${emailLower}</p>
+        <p><strong>Requested Role:</strong> ${role.toUpperCase()}</p>
+        <p><strong>Status:</strong> ⏳ Pending Your Approval</p>
+        <hr>
+        <p>
+          <a href="${approveUrl}" style="background:#10b981;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;margin-right:10px;font-weight:bold;">✅ Approve</a>
+          <a href="${rejectUrl}" style="background:#ef4444;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">❌ Reject</a>
+        </p>
+      `
+    }).catch(err => console.error('Email error:', err));
+
+    return res.json({
+      message: 'Signup request sent. Awaiting admin approval.',
+      status: 'pending'
+    });
+  } catch (error) {
+    console.error('Signup error:', error);
+    res.status(500).json({error: 'Server error'});
+  }
+});
+
+// Approve user endpoint
+app.get('/api/auth/approve', async (req, res) => {
+  try {
+    const {token} = req.query;
+    if (!token || !PENDING_APPROVALS.has(token)) {
+      return res.status(400).json({error: 'Invalid approval token'});
+    }
+
+    const {email, name, role} = PENDING_APPROVALS.get(token);
+    PENDING_APPROVALS.delete(token);
+
+    // Update user status
+    USERS.set(email, {
+      email, name, role,
+      status: 'approved',
+      approvedAt: new Date().toISOString()
+    });
+
+    // Send approval confirmation email
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: '✅ Your FBM Ops Hub Account Approved!',
+      html: `
+        <h3>Welcome to FBM Ops Hub!</h3>
+        <p>Your account has been approved as a <strong>${role.toUpperCase()}</strong>.</p>
+        <p>You can now log in with your email on the dashboard.</p>
+      `
+    }).catch(err => console.error('Email error:', err));
+
+    res.json({message: 'User approved successfully'});
+  } catch (error) {
+    console.error('Approval error:', error);
+    res.status(500).json({error: 'Server error'});
+  }
+});
+
+// Reject user endpoint
+app.get('/api/auth/reject', async (req, res) => {
+  try {
+    const {token} = req.query;
+    if (!token || !PENDING_APPROVALS.has(token)) {
+      return res.status(400).json({error: 'Invalid rejection token'});
+    }
+
+    const {email} = PENDING_APPROVALS.get(token);
+    PENDING_APPROVALS.delete(token);
+
+    // Update user status
+    USERS.set(email, {
+      email,
+      status: 'rejected',
+      rejectedAt: new Date().toISOString()
+    });
+
+    // Send rejection email
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: '❌ Your FBM Ops Hub Signup Request',
+      html: `<p>Your signup request has been rejected. Contact the administrator if you have questions.</p>`
+    }).catch(err => console.error('Email error:', err));
+
+    res.json({message: 'User rejected successfully'});
+  } catch (error) {
+    console.error('Rejection error:', error);
     res.status(500).json({error: 'Server error'});
   }
 });
@@ -403,18 +521,15 @@ app.post('/api/auth/send-login-email', async (req, res) => {
 // Verify login token
 app.post('/api/auth/verify-token', async (req, res) => {
   try {
-    if (!db) return res.status(503).json({error: 'Auth service unavailable'});
-
     const {token} = req.body;
     if (!token) return res.status(400).json({error: 'Token required'});
 
-    const tokenDoc = await db.collection('login_tokens').doc(token).get();
+    const tokenData = LOGIN_TOKENS.get(token);
 
-    if (!tokenDoc.exists) {
+    if (!tokenData) {
       return res.status(401).json({error: 'Invalid token'});
     }
 
-    const tokenData = tokenDoc.data();
     const now = Math.floor(Date.now() / 1000);
 
     if (tokenData.used || tokenData.expires < now) {
@@ -422,35 +537,36 @@ app.post('/api/auth/verify-token', async (req, res) => {
     }
 
     // Mark token as used
-    await tokenDoc.ref.update({used: true});
+    tokenData.used = true;
 
     // Get user data
-    const userDoc = await db.collection('users').doc(tokenData.email).get();
-    const user = userDoc.data();
+    const user = USERS.get(tokenData.email);
 
-    if (user.status !== 'approved') {
+    if (!user || user.status !== 'approved') {
+      // Owner auto-approval
+      if (tokenData.email === OWNER_EMAIL) {
+        const sessionToken = crypto.randomBytes(32).toString('hex');
+        res.json({
+          sessionToken: token,
+          user: {
+            email: OWNER_EMAIL,
+            name: 'Parth Sharma',
+            role: 'owner',
+            id: OWNER_EMAIL
+          }
+        });
+        return;
+      }
       return res.status(403).json({error: 'User not approved'});
     }
 
-    // Create session (7 days)
-    const sessionToken = crypto.randomBytes(32).toString('hex');
-    const sessionExpires = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
-
-    await db.collection('sessions').doc(sessionToken).set({
-      email: tokenData.email,
-      role: user.role,
-      userName: user.name,
-      loginTime: new Date(),
-      expires: sessionExpires
-    });
-
     res.json({
-      sessionToken,
+      sessionToken: token,
       user: {
         email: tokenData.email,
         name: user.name,
         role: user.role,
-        id: user.id || tokenData.email
+        id: user.email
       }
     });
   } catch (error) {
