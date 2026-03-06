@@ -1,0 +1,110 @@
+.admin-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.admin-nav {
+  background: linear-gradient(135deg, #ff6b6b 0%, #d63031 100%);
+  color: white;
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.admin-nav h1 {
+  font-size: 28px;
+  margin: 0;
+}
+
+.admin-content {
+  flex: 1;
+  padding: 40px;
+  overflow-y: auto;
+}
+
+.admin-section {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.admin-section h2 {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.users-list {
+  display: grid;
+  gap: 15px;
+}
+
+.user-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 5px;
+  transition: box-shadow 0.3s;
+}
+
+.user-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.user-info {
+  flex: 1;
+}
+
+.user-email {
+  margin: 0;
+  font-weight: 600;
+  color: #333;
+  font-size: 16px;
+}
+
+.user-status {
+  margin: 5px 0 0 0;
+  color: #ff9800;
+  font-size: 14px;
+}
+
+.user-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-approve,
+.btn-reject {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.3s;
+}
+
+.btn-approve {
+  background: #10b981;
+  color: white;
+}
+
+.btn-approve:hover {
+  background: #059669;
+}
+
+.btn-reject {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-reject:hover {
+  background: #dc2626;
+}

@@ -1,348 +1,285 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const admin = require('firebase-admin');
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 
 // Initialize Express
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 // Security middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
-});
-app.use('/api/', limiter);
-
+app.use(cors());
 app.use(express.json({limit: '50mb'}));
 app.use(express.static('public'));
 
-// Initialize Firebase Admin
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-if (Object.keys(serviceAccount).length > 0) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: process.env.FIREBASE_DATABASE_URL
+// ═══ IN-MEMORY DATA STORE (Demo Mode) ═══
+const users = new Map();
+const pendingApprovals = new Map();
+// ═══ EMAIL SERVICE ═══
+const sendEmail = async (to, subject, html) => {
+  try {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      console.warn('⚠️  Email not configured. Simulating email send to:', to);
+      return true;
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: process.env.EMAIL_SERVICE || 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      html,
+    });
+
+    console.log(`✅ Email sent to ${to}`);
+    return true;
+  } catch (error) {
+    console.error('Email error:', error.message);
+    return false;
+  }
+};
+
+// ═══ JWT HELPERS ═══
+const generateToken = (email, role) => {
+  return jwt.sign({ email, role }, process.env.JWT_SECRET || 'dev-secret-key-12345', {
+    expiresIn: '7d',
   });
-}
+};
 
-const db = admin.firestore ? admin.firestore() : null;
-
-// ═══ MODELS ═══
-const Users = {
-  async getAll() {
-    if (!db) return [];
-    const snap = await db.collection('users').get();
-    return snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
-  },
-  
-  async getByEmail(email) {
-    if (!db) return null;
-    const snap = await db.collection('users').where('email', '==', email).limit(1).get();
-    return snap.empty ? null : {id: snap.docs[0].id, ...snap.docs[0].data()};
-  },
-  
-  async create(email, name) {
-    if (!db) return null;
-    const userId = uuidv4();
-    const userData = {
-      id: userId,
-      email,
-      name,
-      role: null,
-      approved: false,
-      createdAt: new Date().toISOString(),
-      lastLogin: null,
-      status: 'pending_approval'
-    };
-    await db.collection('users').doc(email).set(userData);
-    return userData;
-  },
-  
-  async updateRole(email, role) {
-    if (!db) return null;
-    await db.collection('users').doc(email).update({
-      role,
-      approved: true,
-      lastLogin: new Date().toISOString()
-    });
-  },
-  
-  async updateLastLogin(email) {
-    if (!db) return;
-    await db.collection('users').doc(email).update({
-      lastLogin: new Date().toISOString()
-    });
+const verifyToken = (token) => {
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET || 'dev-secret-key-12345');
+  } catch {
+    return null;
   }
 };
 
-const AuditLogs = {
-  async add(logEntry) {
-    if (!db) return;
-    await db.collection('audit_logs').add({
-      ...logEntry,
-      timestamp: new Date().toISOString()
-    });
-  },
-  
-  async getByOrder(orderId) {
-    if (!db) return [];
-    const snap = await db.collection('audit_logs').where('orderId', '==', orderId).get();
-    return snap.docs.map(doc => doc.data()).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  },
-  
-  async getAll(filter = {}) {
-    if (!db) return [];
-    let query = db.collection('audit_logs');
-    if (filter.user) query = query.where('user', '==', filter.user);
-    if (filter.field) query = query.where('field', '==', filter.field);
-    
-    const snap = await query.orderBy('timestamp', 'desc').limit(1000).get();
-    return snap.docs.map(doc => doc.data());
-  }
+// ═══ MIDDLEWARE: Authenticate ═══
+const authenticate = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token' });
+
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ error: 'Invalid token' });
+
+  req.user = decoded;
+  next();
 };
 
-// ═══ AUTH ROUTES ═══
+// Register
 app.post('/api/auth/register', async (req, res) => {
-  try {
-    const {email, name} = req.body;
-    if (!email || !name) return res.status(400).json({error: 'Email and name required'});
-    
-    let user = await Users.getByEmail(email);
-    if (user && user.approved) {
-      return res.status(400).json({error: 'User already exists'});
-    }
-    
-    if (!user) {
-      user = await Users.create(email, name);
-    }
-    
-    // Log signup request
-    await AuditLogs.add({
-      user: name,
-      email,
-      action: 'signup_requested',
-      status: 'pending_approval'
-    });
-    
-    res.json({
-      message: 'Signup request sent. Awaiting admin approval.',
-      email,
-      status: 'pending_approval'
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({error: 'Signup failed'});
+  const { email, password, name } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
   }
+
+  if (users.has(email)) {
+    return res.status(400).json({ error: 'User already exists' });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const userId = Math.random().toString(36).substring(7);
+
+  users.set(email, {
+    id: userId,
+    email,
+    password: hashedPassword,
+    name: name || email,
+    role: 'user',
+    approved: false,
+    createdAt: new Date().toISOString(),
+  });
+
+  pendingApprovals.set(email, {
+    email,
+    name: name || email,
+    requestedAt: new Date().toISOString(),
+  });
+
+  // Send verification email
+  await sendEmail(
+    email,
+    'Welcome to Babaclick FBM Hub - Pending Admin Approval',
+    `
+    <h2>Welcome, ${name || email}!</h2>
+    <p>Your account has been created and is pending admin approval.</p>
+    <p>You'll receive an email once an administrator approves your access.</p>
+    <p>Thank you!</p>
+    `
+  );
+
+  // Notify admin
+  if (process.env.ADMIN_EMAIL) {
+    await sendEmail(
+      process.env.ADMIN_EMAIL,
+      'New User Pending Approval',
+      `<p><strong>${name || email}</strong> (${email}) has registered and needs approval.</p>`
+    );
+  }
+
+  res.json({ message: '✅ Registration successful. Pending admin approval.' });
 });
 
+// Login
 app.post('/api/auth/login', async (req, res) => {
-  try {
-    const {email} = req.body;
-    if (!email) return res.status(400).json({error: 'Email required'});
-    
-    const user = await Users.getByEmail(email);
-    
-    if (!user) {
-      return res.status(401).json({error: 'User not found. Please register first.'});
-    }
-    
-    if (!user.approved) {
-      return res.status(403).json({error: 'Account pending admin approval'});
-    }
-    
-    // Update last login
-    await Users.updateLastLogin(email);
-    
-    // Generate session token
-    const token = Buffer.from(JSON.stringify({
-      email,
-      name: user.name,
-      role: user.role,
-      loginTime: new Date().toISOString()
-    })).toString('base64');
-    
-    res.json({
-      success: true,
-      token,
-      user: {
-        email,
-        name: user.name,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({error: 'Login failed'});
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
   }
+
+  const user = users.get(email);
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  const validPassword = await bcrypt.compare(password, user.password);
+  if (!validPassword) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  if (!user.approved) {
+    return res.status(403).json({ error: 'Account pending admin approval' });
+  }
+
+  const token = generateToken(email, user.role);
+  res.json({
+    message: '✅ Login successful',
+    token,
+    user: { email: user.email, name: user.name, role: user.role },
+  });
 });
 
-// ═══ USAGE TRACKING ═══
-const UsageLog = {
-  async recordWrite(sheets = 0, firebase = 0, other = 0) {
-    if (!db) return;
-    await db.collection('usage_logs').add({
-      timestamp: new Date().toISOString(),
-      sheets_writes: sheets,
-      firebase_ops: firebase,
-      estimated_cost_usd: (sheets * 0.000006) + (firebase * 0.000001),
-      date: new Date().toISOString().split('T')[0]
-    });
-  },
-  
-  async getUsageStats() {
-    if (!db) return {total_cost: 0, sheets_writes: 0, firebase_ops: 0, remaining_credits: 300};
-    
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const snap = await db.collection('usage_logs')
-      .where('timestamp', '>=', thirtyDaysAgo.toISOString())
-      .get();
-    
-    let total_cost = 0;
-    let sheets_writes = 0;
-    let firebase_ops = 0;
-    
-    snap.docs.forEach(doc => {
-      const data = doc.data();
-      total_cost += data.estimated_cost_usd || 0;
-      sheets_writes += data.sheets_writes || 0;
-      firebase_ops += data.firebase_ops || 0;
-    });
-    
-    return {
-      total_cost: total_cost.toFixed(2),
-      sheets_writes,
-      firebase_ops,
-      remaining_credits: (300 - total_cost).toFixed(2),
-      period: 'Last 30 days'
-    };
+// Get pending approvals (admin only)
+app.get('/api/admin/pending-approvals', authenticate, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin only' });
   }
-};
 
-// ═══ ADMIN ROUTES ═══
-app.get('/api/admin/pending-users', async (req, res) => {
-  try {
-    const userEmail = req.headers['x-user-email'];
-    if (!ADMIN_USERS.includes(userEmail)) return res.status(403).json({error: 'Admin access required'});
-    
-    const users = await Users.getAll();
-    const pending = users.filter(u => u.status === 'pending_approval');
-    
-    res.json({pending});
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({error: 'Failed to fetch pending users'});
-  }
+  const pending = Array.from(pendingApprovals.values());
+  res.json({ pending });
 });
 
-app.post('/api/admin/approve-user', async (req, res) => {
-  try {
-    const userEmail = req.headers['x-user-email'];
-    if (!ADMIN_USERS.includes(userEmail)) return res.status(403).json({error: 'Admin access required'});
-    
-    const {email, role} = req.body;
-    if (!email || !role) return res.status(400).json({error: 'Email and role required'});
-    
-    const validRoles = ['owner', 'importer', 'packer'];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({error: 'Invalid role'});
-    }
-    
-    await Users.updateRole(email, role);
-    
-    await AuditLogs.add({
-      action: 'user_approved',
-      email,
-      role,
-      approvedBy: 'admin'
-    });
-    
-    res.json({success: true, message: `User ${email} approved as ${role}`});
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({error: 'Approval failed'});
+// Approve user (admin only)
+app.post('/api/admin/approve/:email', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin only' });
   }
+
+  const { email } = req.params;
+  const user = users.get(email);
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  user.approved = true;
+  user.role = 'user';
+  pendingApprovals.delete(email);
+
+  await sendEmail(
+    email,
+    '✅ Your Account Has Been Approved!',
+    `
+    <h2>Great news, ${user.name}!</h2>
+    <p>Your account has been approved by an administrator.</p>
+    <p>You can now login at: <a href="${process.env.FRONTEND_URL || 'https://babaclick-hub.com'}">FBM Operations Hub</a></p>
+    `
+  );
+
+  res.json({ message: '✅ User approved' });
 });
 
-app.get('/api/admin/usage-stats', async (req, res) => {
-  try {
-    const userEmail = req.headers['x-user-email'];
-    if (!ADMIN_USERS.includes(userEmail)) return res.status(403).json({error: 'Admin access required'});
-    
-    const stats = await UsageLog.getUsageStats();
-    res.json(stats);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({error: 'Failed to fetch usage stats'});
+// Reject user (admin only)
+app.post('/api/admin/reject/:email', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin only' });
   }
+
+  const { email } = req.params;
+  users.delete(email);
+  pendingApprovals.delete(email);
+
+  await sendEmail(
+    email,
+    'Account Request Rejected',
+    '<p>Your account request has been rejected. Please contact support for details.</p>'
+  );
+
+  res.json({ message: '✅ User rejected' });
 });
 
-// ═══ AUDIT LOG ROUTES ═══
-app.get('/api/audit-logs', async (req, res) => {
-  try {
-    const logs = await AuditLogs.getAll();
-    res.json({logs});
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({error: 'Failed to fetch audit logs'});
-  }
+// Get user profile
+app.get('/api/auth/profile', authenticate, (req, res) => {
+  const user = users.get(req.user.email);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  res.json({
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    approved: user.approved,
+    createdAt: user.createdAt,
+  });
 });
 
-app.post('/api/audit-logs', async (req, res) => {
-  try {
-    const {orderId, field, oldValue, newValue, details, user, role} = req.body;
-    await AuditLogs.add({
-      orderId,
-      field,
-      oldValue,
-      newValue,
-      details,
-      user,
-      role
-    });
-    res.json({success: true});
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({error: 'Failed to log change'});
-  }
-});
+// Create admin account (first time only)
+app.post('/api/auth/create-admin', async (req, res) => {
+  const { email, password, name } = req.body;
 
-// ═══ SHEET SYNC ROUTES ═══
-app.get('/api/google-sheet/sync', async (req, res) => {
-  try {
-    // This endpoint will sync with Google Sheets
-    // Implementation depends on your sheets setup
-    res.json({message: 'Sheet sync endpoint ready'});
-  } catch (error) {
-    res.status(500).json({error: 'Sync failed'});
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
   }
+
+  if (Array.from(users.values()).some(u => u.role === 'admin')) {
+    return res.status(403).json({ error: 'Admin already exists' });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const userId = Math.random().toString(36).substring(7);
+
+  users.set(email, {
+    id: userId,
+    email,
+    password: hashedPassword,
+    name: name || 'Admin',
+    role: 'admin',
+    approved: true,
+    createdAt: new Date().toISOString(),
+  });
+
+  const token = generateToken(email, 'admin');
+  res.json({
+    message: '✅ Admin account created',
+    token,
+    user: { email, name: name || 'Admin', role: 'admin' },
+  });
 });
 
 // ═══ HEALTH CHECK ═══
 app.get('/api/health', (req, res) => {
-  res.json({status: 'ok', timestamp: new Date().toISOString()});
+  res.json({ status: '✅ Server is running', time: new Date().toISOString() });
 });
 
-// Serve frontend
+// ═══ FALLBACK: Serve React App ═══
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 404 fallback
+// 404 fallback - serve index.html for SPA routing
 app.use((req, res) => {
-  res.status(404).json({error: 'Endpoint not found'});
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Error handler
@@ -351,10 +288,29 @@ app.use((err, req, res, next) => {
   res.status(500).json({error: 'Internal server error'});
 });
 
+// ═══ START SERVER ═══
 app.listen(PORT, () => {
-  console.log(`✓ FBM Ops Hub running on port ${PORT}`);
-  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`✓ Firebase initialized: ${!!db}`);
+  console.log(`
+╔════════════════════════════════════════════════════════════╗
+║  ✅ Babaclick FBM Operations Hub Server                    ║
+║                                                            ║
+║  🌐 Running on: http://localhost:${PORT}                     ║
+║  📍 API: http://localhost:${PORT}/api                       ║
+║  ✔️  Frontend: http://localhost:${PORT}                     ║
+║                                                            ║
+║  📝 First: Create admin account:                           ║
+║     POST http://localhost:${PORT}/api/auth/create-admin     ║
+║     Body: {                                               ║
+║       "email": "admin@test.com",                          ║
+║       "password": "Test123!",                             ║
+║       "name": "Admin"                                     ║
+║     }                                                      ║
+║                                                            ║
+║  Then: Register regular user at login page               ║
+║  Admin approves user in dashboard                         ║
+║                                                            ║
+╚════════════════════════════════════════════════════════════╝
+  `);
 });
 
 module.exports = app;
