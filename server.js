@@ -326,7 +326,7 @@ app.get('/api/auth/reject', async (req, res) => {
 
 // ═══ HEALTH CHECK ═══
 app.get('/api/health', (req, res) => {
-  res.json({ status: '✅ Server is running', time: new Date().toISOString() });
+  res.json({ status: '✅ Server is running', version: '2.0 - Email Auth Ready', time: new Date().toISOString() });
 });
 
 // ═══ FALLBACK: Serve React App ═══
