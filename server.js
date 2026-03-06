@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
@@ -22,24 +22,19 @@ const loginTokens = new Map(); // {token: {email, expires, used}}
 
 const OWNER_EMAIL = 'parttthh@gmail.com';
 const crypto = require('crypto');
-// ═══ EMAIL SERVICE ═══
+
+// ═══ EMAIL SERVICE (Using Resend API - Render compatible) ═══
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
 const sendEmail = async (to, subject, html) => {
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-      console.warn('⚠️  Email not configured. Simulating email send to:', to);
-      return true;
+    if (!resend) {
+      console.warn('⚠️  RESEND_API_KEY not configured. Email delivery disabled.');
+      return false;
     }
 
-    const transporter = nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
-      },
-    });
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    await resend.emails.send({
+      from: process.env.EMAIL_FROM || 'noreply@babaclick.com',
       to,
       subject,
       html,
