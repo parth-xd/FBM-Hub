@@ -324,9 +324,110 @@ app.get('/api/auth/reject', async (req, res) => {
   }
 });
 
+// ═══ GOOGLE SHEETS INTEGRATION ═══
+const {google} = require('googleapis');
+const fs = require('fs');
+
+const CREDENTIALS_PATH = './credentials/service-account-key.json';
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+
+async function getSheetsClient() {
+  if (!fs.existsSync(CREDENTIALS_PATH)) {
+    throw new Error(`Missing service account key at ${CREDENTIALS_PATH}`);
+  }
+  const auth = new google.auth.GoogleAuth({keyFile: CREDENTIALS_PATH, scopes: SCOPES});
+  const client = await auth.getClient();
+  return google.sheets({version: 'v4', auth: client});
+}
+
+// Read from Google Sheets
+app.get('/api/read', async (req, res) => {
+  try {
+    const spreadsheetId = req.query.spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+    if (!spreadsheetId) return res.status(400).json({error: 'spreadsheetId required'});
+    
+    const range = req.query.range || 'Main STB Expenses!A3:AN';
+    const sheets = await getSheetsClient();
+    const r = await sheets.spreadsheets.values.get({spreadsheetId, range});
+    
+    res.json({values: r.data.values || []});
+  } catch (e) {
+    console.error('Read error:', e.message);
+    res.status(500).json({error: e.message});
+  }
+});
+
+// Write to Google Sheets
+app.post('/api/write', async (req, res) => {
+  try {
+    const {spreadsheetId, range, values} = req.body;
+    const id = spreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+    
+    if (!id) return res.status(400).json({error: 'spreadsheetId required'});
+    if (!range || !values) return res.status(400).json({error: 'range and values required'});
+    
+    const sheets = await getSheetsClient();
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: id,
+      range,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {values}
+    });
+    
+    res.json({ok: true});
+  } catch (e) {
+    console.error('Write error:', e.message);
+    res.status(500).json({error: e.message});
+  }
+});
+
+// ShipStation label creation
+app.post('/api/shipstation/fulfill-order', async (req, res) => {
+  try {
+    const {orderId, weight, carrier} = req.body;
+    
+    if (!orderId || !weight) {
+      return res.status(400).json({error: 'orderId and weight required'});
+    }
+    
+    const shipstationKey = process.env.SHIPSTATION_API_KEY;
+    const carrierId = carrier || process.env.SHIPSTATION_CARRIER_ID;
+    
+    if (!shipstationKey || !carrierId) {
+      return res.status(400).json({error: 'ShipStation credentials not configured'});
+    }
+    
+    // Create label via ShipStation API
+    const auth = Buffer.from(`${shipstationKey}:`).toString('base64');
+    const response = await fetch('https://ssapi.shipstation.com/shipments/createlabel', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        orderId,
+        weight: {value: parseFloat(weight), units: 'ounces'},
+        carrierId
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return res.status(response.status).json({error: data.message || 'ShipStation error'});
+    }
+    
+    res.json({ok: true, label: data});
+  } catch (e) {
+    console.error('ShipStation error:', e.message);
+    res.status(500).json({error: e.message});
+  }
+});
+
 // ═══ HEALTH CHECK ═══
 app.get('/api/health', (req, res) => {
-  res.json({ status: '✅ Server is running', version: '2.0 - Email Auth Ready', time: new Date().toISOString() });
+  res.json({ status: '✅ Server is running', version: '2.0 - Email Auth + Sheets Ready', time: new Date().toISOString() });
 });
 
 // ═══ FALLBACK: Serve React App ═══
