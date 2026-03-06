@@ -33,14 +33,19 @@ const sendEmail = async (to, subject, html) => {
       return false;
     }
 
-    await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: process.env.EMAIL_FROM || 'parttthh@gmail.com',
       to,
       subject,
       html,
     });
 
-    console.log(`✅ Email sent to ${to}`);
+    if (error) {
+      console.error('Email error:', error);
+      return false;
+    }
+
+    console.log(`✅ Email sent to ${to}`, data);
     return true;
   } catch (error) {
     console.error('Email error:', error.message);
