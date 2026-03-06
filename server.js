@@ -332,12 +332,26 @@ const CREDENTIALS_PATH = './credentials/service-account-key.json';
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 async function getSheetsClient() {
-  if (!fs.existsSync(CREDENTIALS_PATH)) {
-    throw new Error(`Missing service account key at ${CREDENTIALS_PATH}`);
+  // Try to use credentials file first (local development)
+  if (fs.existsSync(CREDENTIALS_PATH)) {
+    const auth = new google.auth.GoogleAuth({keyFile: CREDENTIALS_PATH, scopes: SCOPES});
+    const client = await auth.getClient();
+    return google.sheets({version: 'v4', auth: client});
   }
-  const auth = new google.auth.GoogleAuth({keyFile: CREDENTIALS_PATH, scopes: SCOPES});
-  const client = await auth.getClient();
-  return google.sheets({version: 'v4', auth: client});
+  
+  // Fall back to environment variable (Render deployment)
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+    try {
+      const credentialsObj = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+      const auth = new google.auth.GoogleAuth({credentials: credentialsObj, scopes: SCOPES});
+      const client = await auth.getClient();
+      return google.sheets({version: 'v4', auth: client});
+    } catch (e) {
+      console.error('Invalid credentials in env var:', e.message);
+    }
+  }
+  
+  throw new Error(`Missing Google credentials. Provide either ${CREDENTIALS_PATH} or GOOGLE_APPLICATION_CREDENTIALS_JSON env var`);
 }
 
 // Read from Google Sheets
