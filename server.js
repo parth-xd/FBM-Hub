@@ -34,7 +34,7 @@ const sendEmail = async (to, subject, html) => {
     }
 
     await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'noreply@babaclick.com',
+      from: process.env.EMAIL_FROM || 'parttthh@gmail.com',
       to,
       subject,
       html,
