@@ -2716,9 +2716,9 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         {stats.editing>0&&<div style={{background:'rgba(16,185,129,0.08)',border:'1px solid rgba(16,185,129,0.25)',borderRadius:8,padding:'7px 12px',color:'#10b981',fontSize:11,fontWeight:700}}>🔒 {stats.editing} being imported</div>}
       </div>
 
-      {/* Filters + Search - Main mobile interface */}
-      <div role="filters" style={{display:'flex',gap:6,padding:'8px 12px',borderBottom:'1px solid rgba(255,255,255,0.04)',flexWrap:'wrap',alignItems:'center',backgroundColor:'rgba(6,12,24,0.5)'}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search order, ASIN, SKU…" className="input" style={{flex:'0 1 180px',minWidth:120,maxWidth:'35vw',padding:'7px 10px',fontSize:11}}/>
+      {/* Filters + Search - Main mobile interface - ALWAYS VISIBLE */}
+      <div role="filters" style={{display:'flex !important',gap:6,padding:'8px 12px',borderBottom:'1px solid rgba(255,255,255,0.04)',flexWrap:'wrap',alignItems:'center',backgroundColor:'rgba(6,12,24,0.5)',visibility:'visible'}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search order, ASIN, SKU…" className="input" style={{flex:'0 1 180px',minWidth:120,maxWidth:'35vw',padding:'7px 10px',fontSize:11}} />
         
         <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 1 auto',minWidth:100,maxWidth:'25vw',padding:'7px 8px',fontSize:10}}>
           <option value="">All Suppliers</option>
@@ -2731,7 +2731,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         
         <div style={{display:'flex',gap:2,background:'rgba(255,255,255,0.02)',borderRadius:7,padding:3,flexWrap:'wrap'}}>
           {FILTERS.map(f=>(
-            <button key={f.k} onClick={()=>setFilter(f.k)} style={{background:filter===f.k?'rgba(29,78,216,0.55)':'transparent',border:'none',color:filter===f.k?'#fff':f.c||'#334155',borderRadius:5,padding:'4px 10px',fontSize:10,cursor:'pointer',fontWeight:700,transition:'all .12s'}}>
+            <button key={f.k} onClick={()=>setFilter(f.k)} style={{background:filter===f.k?'rgba(29,78,216,0.55)':'transparent',border:'none',color:filter===f.k?'#fff':f.c||'#334155',borderRadius:5,padding:'4px 10px',fontSize:10,cursor:'pointer',fontWeight:700,transition:'all .12s',whiteSpace:'nowrap'}}>
               {f.l}
             </button>
           ))}
