@@ -104,6 +104,61 @@ tr.datarow:hover td{filter:brightness(1.12)}
   .btn, .nav-tab, .input, select { min-height: 44px; }
   .btn:active, .nav-tab:active { opacity: 0.8; }
 }
+
+/* ═══ OPERATIONS TABLE MOBILE ═══ */
+@media (max-width: 768px) {
+  /* Hide non-essential columns on tablet */
+  th[data-col="hts"], td[data-col="hts"],
+  th[data-col="links"], td[data-col="links"],
+  th[data-col="profit"], td[data-col="profit"] {
+    display: none;
+  }
+  
+  /* Tighter table spacing */
+  table { font-size: 10px; }
+  thead tr { background: #060c18; }
+  th { padding: 6px 8px !important; font-size: 8px; }
+  td { padding: 5px 8px !important; }
+  
+  /* Stats bar wraps better */
+  div[role="stats-bar"] { gap: 6px; padding: 8px 12px; }
+}
+
+@media (max-width: 480px) {
+  /* Hide more columns on phones */
+  th[data-col="hts"], td[data-col="hts"],
+  th[data-col="links"], td[data-col="links"],
+  th[data-col="profit"], td[data-col="profit"],
+  th[data-col="disc"], td[data-col="disc"],
+  th[data-col="weight"], td[data-col="weight"],
+  th[data-col="poId"], td[data-col="poId"] {
+    display: none;
+  }
+  
+  /* Minimal table sizing */
+  table { font-size: 9px; }
+  th { padding: 5px 6px !important; font-size: 7px; }
+  td { padding: 4px 6px !important; }
+  
+  /* Input fields smaller */
+  td input { font-size: 9px; padding: 3px !important; }
+  
+  /* Stats collapse to single row with smaller text */
+  div[role="stats-bar"] {
+    gap: 4px;
+    padding: 6px 12px;
+    overflow-x: auto;
+  }
+  
+  /* Search bar narrower */
+  div[role="filters"] .input {
+    width: 100% !important;
+    margin-bottom: 4px;
+  }
+  
+  /* Pagination compact */
+  div[role="pagination"] { gap: 4px; font-size: 10px; }
+}
 </style>
 </head>
 <body>
@@ -2372,7 +2427,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
   return (
     <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 58px)'}}>
       {/* Stats bar */}
-      <div style={{display:'flex',gap:8,padding:'12px 20px',borderBottom:'1px solid rgba(255,255,255,0.05)',flexWrap:'wrap',alignItems:'center'}}>
+      <div role="stats-bar" style={{display:'flex',gap:8,padding:'12px 20px',borderBottom:'1px solid rgba(255,255,255,0.05)',flexWrap:'wrap',alignItems:'center'}}>
         {[
           {l:'Total',v:stats.total},
           {l:'Shipped',v:stats.shipped,c:'#22c55e'},
@@ -2391,7 +2446,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
       </div>
 
       {/* Filters + Search */}
-      <div style={{display:'flex',gap:8,padding:'8px 20px',borderBottom:'1px solid rgba(255,255,255,0.04)',flexWrap:'wrap',alignItems:'center'}}>
+      <div role="filters" style={{display:'flex',gap:8,padding:'8px 20px',borderBottom:'1px solid rgba(255,255,255,0.04)',flexWrap:'wrap',alignItems:'center'}}>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search order, ASIN, SKU, product, PO, importer…" className="input" style={{width:240,padding:'7px 12px'}}/>
         
         <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{width:140,padding:'7px 12px',fontSize:11}}>
@@ -2415,7 +2470,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
       </div>
 
       {/* Table */}
-      <div style={{padding:'8px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+      <div role="pagination" style={{padding:'8px 20px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
           <div style={{fontSize:11,color:'#334155',marginRight:6}}>Rows:</div>
           <select value={pageSize} onChange={e=>{const v= e.target.value==='all'?filtered.length: Number(e.target.value); setPageSize(v);}} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)',color:'#e2e8f0',padding:'6px 8px',borderRadius:6}}>
@@ -2439,7 +2494,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         <table>
           <thead>
             <tr style={{background:'#060c18'}}>
-              {cols.map(c=><th key={c} style={{padding:'7px 12px',textAlign:'left',color:'#1e3a5f',fontWeight:700,fontSize:9,textTransform:'uppercase',letterSpacing:'.06em',whiteSpace:'nowrap',width:COL_W[c],background:'#060c18',borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
+              {cols.map(c=><th key={c} data-col={c} style={{padding:'7px 12px',textAlign:'left',color:'#1e3a5f',fontWeight:700,fontSize:9,textTransform:'uppercase',letterSpacing:'.06em',whiteSpace:'nowrap',width:COL_W[c],background:'#060c18',borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
                 {COL_H[c]}
               </th>)}
             </tr>
@@ -2457,7 +2512,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
                 <tr key={order.id} className="datarow" onClick={()=>setSelected({...order})}
                   style={{background:s.bg,borderBottom:`1px solid ${isGroupEnd&&isMPO?'rgba(96,165,250,0.25)':s.border}`,borderTop:isGroupStart?'2px solid rgba(96,165,250,0.3)':undefined}}>
                   {cols.map(c=>(
-                    <td key={c} style={{padding:'6px 12px',verticalAlign:'middle',borderLeft:c==='status'&&isMPO?'3px solid rgba(96,165,250,0.45)':'none'}}>
+                    <td key={c} data-col={c} style={{padding:'6px 12px',verticalAlign:'middle',borderLeft:c==='status'&&isMPO?'3px solid rgba(96,165,250,0.45)':'none'}}>
                       {renderCell(c,order)}
                     </td>
                   ))}
