@@ -2221,6 +2221,14 @@ function AuditLogView() {
   React.useEffect(() => {
     const allLogs = getAllAuditLogs();
     setLogs(allLogs);
+    
+    // Poll for new audit logs every 2 seconds to see live updates
+    const pollInterval = setInterval(() => {
+      const updatedLogs = getAllAuditLogs();
+      setLogs(updatedLogs);
+    }, 2000);
+    
+    return () => clearInterval(pollInterval);
   }, []);
 
   const filteredLogs = React.useMemo(() => {
