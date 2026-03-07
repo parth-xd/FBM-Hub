@@ -2779,26 +2779,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         ))}
       </div>
 
-      {/* Table - Pagination */}
-      <div role="pagination" style={{padding:'8px 12px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,borderBottom:'1px solid rgba(255,255,255,0.04)',backgroundColor:'rgba(6,12,24,0.3)',flexWrap:'wrap',minHeight:44}}>
-        <div style={{display:'flex',gap:6,alignItems:'center',fontSize:10}}>
-          <div style={{fontSize:9,color:'#334155',marginRight:3,textTransform:'uppercase',fontWeight:700}}>Rows:</div>
-          <select value={pageSize} onChange={e=>{const v= e.target.value==='all'?filtered.length: Number(e.target.value); setPageSize(v);}} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)',color:'#e2e8f0',padding:'5px 6px',borderRadius:5,fontSize:10}}>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-            <option value={200}>200</option>
-            <option value={500}>500</option>
-            <option value="all">All</option>
-          </select>
-          <div style={{fontSize:10,color:'#94a3b8'}}>{filtered.length?`${startIndex+1}-${endIndex}/${filtered.length}`:'0'}</div>
-        </div>
-        <div style={{display:'flex',gap:6,alignItems:'center'}}>
-          <button className="btn" style={{padding:'5px 6px',fontSize:10}} onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page<=0}>Prev</button>
-          <div style={{fontFamily:'IBM Plex Mono',color:'#aab6c9',fontSize:10}}>{page+1}/{totalPages}</div>
-          <button className="btn" style={{padding:'5px 6px',fontSize:10}} onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page+1>=totalPages}>Next</button>
-        </div>
-      </div>
+
 
       <div style={{flex:1,overflowX:'auto',overflowY:'auto',paddingTop:'2px'}}>
         <table>
@@ -2834,13 +2815,22 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         </table>
       </div>
 
-      {/* Legend */}
-      <div style={{padding:'6px 20px',borderTop:'1px solid rgba(255,255,255,0.04)',display:'flex',gap:14,flexWrap:'wrap',alignItems:'center'}}>
-        {Object.entries(STATE).map(([k,s])=><div key={k} style={{display:'flex',alignItems:'center',gap:4,fontSize:9,color:'#1e3a5f'}}>
-          <div style={{width:6,height:6,borderRadius:1,background:s.badge}}/>{s.label}
-        </div>)}
-        <div style={{color:'#1e3a5f',fontSize:9}}>· Blue left border + blue ID = Multi-PO (grouped together)</div>
-        <div style={{color:'#1e3a5f',fontSize:9,marginLeft:'auto',fontFamily:'IBM Plex Mono'}}>{filtered.length}/{orders.length}</div>
+      {/* Footer: Legend + Pagination */}
+      <div style={{padding:'5px 14px',borderTop:'1px solid rgba(255,255,255,0.04)',display:'flex',gap:10,flexWrap:'nowrap',alignItems:'center',backgroundColor:'rgba(6,12,24,0.3)',width:'100%',boxSizing:'border-box'}}>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',flex:'1 1 auto',minWidth:0}}>
+          {Object.entries(STATE).map(([k,s])=><div key={k} style={{display:'flex',alignItems:'center',gap:3,fontSize:8,color:'#1e3a5f',whiteSpace:'nowrap'}}>
+            <div style={{width:5,height:5,borderRadius:1,background:s.badge}}/>{s.label}
+          </div>)}
+        </div>
+        <div style={{display:'flex',gap:5,alignItems:'center',flexShrink:0}}>
+          <select value={pageSize} onChange={e=>{const v=e.target.value==='all'?filtered.length:Number(e.target.value);setPageSize(v);}} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)',color:'#e2e8f0',padding:'3px 4px',borderRadius:4,fontSize:9}}>
+            <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option><option value={200}>200</option><option value={500}>500</option><option value="all">All</option>
+          </select>
+          <div style={{fontSize:9,color:'#94a3b8',fontFamily:'IBM Plex Mono',whiteSpace:'nowrap'}}>{filtered.length?`${startIndex+1}-${endIndex}/${filtered.length}`:'0'}</div>
+          <button className="btn" style={{padding:'3px 6px',fontSize:9,minHeight:'auto',minWidth:'auto'}} onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page<=0}>‹</button>
+          <div style={{fontFamily:'IBM Plex Mono',color:'#aab6c9',fontSize:9,whiteSpace:'nowrap'}}>{page+1}/{totalPages}</div>
+          <button className="btn" style={{padding:'3px 6px',fontSize:9,minHeight:'auto',minWidth:'auto'}} onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page+1>=totalPages}>›</button>
+        </div>
       </div>
 
       {selected&&<OrderModal order={selected} role={role} onClose={()=>setSelected(null)} onUpdate={updateOrder} syncCell={syncCell} onCreateMultiPO={createMultiPO} setOrders={setOrders} getCombinedDiscrepancy={getCombinedDiscrepancy} orders={orders}/>}
