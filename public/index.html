@@ -124,6 +124,33 @@ tr.datarow:hover td{filter:brightness(1.12)}
   .btn:active, .nav-tab:active { opacity: 0.8; }
 }
 
+/* ═══ DESKTOP FILTER LAYOUT (default, > 768px) ═══ */
+div[role="filters"] {
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+div[role="filters"] > input:first-child {
+  flex: 1 0 200px;
+}
+
+div[role="filters"] > select {
+  flex: 0 0 140px;
+}
+
+div[role="filters"] > input[type="date"] {
+  flex: 0 0 150px;
+}
+
+div[role="filters"] > div {
+  flex: 1 0 auto;
+  gap: 6px;
+}
+
+div[role="filters"] > button {
+  flex: 0 0 auto;
+}
+
 /* ═══ OPERATIONS TABLE MOBILE ═══ */
 @media (max-width: 768px) {
   /* Hide non-essential columns on tablet */
@@ -144,26 +171,27 @@ tr.datarow:hover td{filter:brightness(1.12)}
   th { padding: 6px 8px !important; font-size: 8px; }
   td { padding: 5px 8px !important; }
   
-  /* Optimize filters on tablet - maintain consistency */
+  /* TABLET OPTIMIZED FILTERS (768px and below) */
   div[role="filters"] {
-    gap: 8px !important;
-    padding: 10px 12px !important;
+    gap: 8px;
+    padding: 10px 12px;
   }
   
-  div[role="filters"] > input,
+  div[role="filters"] > input:first-child {
+    flex: 0 1 150px;
+  }
+  
   div[role="filters"] > select {
-    height: 38px !important;
+    flex: 0 1 120px;
+  }
+  
+  div[role="filters"] > input[type="date"] {
+    flex: 0 1 130px;
   }
   
   div[role="filters"] > div {
-    gap: 6px !important;
-    flex: 1 0 auto;
-  }
-  
-  div[role="filters"] > div > button {
-    padding: 6px 10px;
-    font-size: 10px;
-    height: 28px !important;
+    flex: 0 1 auto;
+    gap: 4px;
   }
 }
 
@@ -184,26 +212,44 @@ tr.datarow:hover td{filter:brightness(1.12)}
   textarea { min-height: 100px; }
   .section-title { font-size: 9px; }
   
-  /* Mobile filters - consistent with desktop */
+  /* Mobile filters - PHONE VIEW - 2 column grid layout */
   div[role="filters"] {
-    gap: 8px !important;
-    padding: 10px 12px !important;
+    gap: 8px;
+    padding: 8px 12px;
   }
   
-  div[role="filters"] > input,
+  div[role="filters"] > input:first-child {
+    flex: 0 1 calc(50% - 4px);
+    min-width: 80px;
+    height: 38px;
+  }
+  
   div[role="filters"] > select {
-    height: 38px !important;
+    flex: 0 1 calc(50% - 4px);
+    min-width: 80px;
+    height: 38px;
+  }
+  
+  div[role="filters"] > input[type="date"] {
+    flex: 0 1 calc(50% - 4px);
+    min-width: 80px;
+    height: 38px;
   }
   
   div[role="filters"] > div {
-    gap: 6px !important;
-    flex: 1 0 auto;
+    flex: 0 1 100%;
+    gap: 4px;
+    padding: 2px;
   }
   
   div[role="filters"] > div > button {
-    padding: 6px 10px;
     font-size: 9px;
-    height: 28px !important;
+    padding: 5px 8px;
+    height: 26px;
+  }
+  
+  div[role="filters"] > button {
+    flex: 0 1 auto;
   }
   
   /* Compact pagination on phones */
@@ -2709,20 +2755,20 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         {stats.editing>0&&<div style={{background:'rgba(16,185,129,0.08)',border:'1px solid rgba(16,185,129,0.25)',borderRadius:8,padding:'7px 12px',color:'#10b981',fontSize:11,fontWeight:700}}>🔒 {stats.editing} being imported</div>}
       </div>
 
-      {/* Filters + Search - Main mobile interface - ALWAYS VISIBLE */}
+      {/* Filters + Search - Optimized for both desktop and mobile */}
       <div role="filters" style={{display:'flex',gap:8,padding:'10px 12px',borderBottom:'1px solid rgba(255,255,255,0.04)',flexWrap:'wrap',alignItems:'center',backgroundColor:'rgba(6,12,24,0.5)'}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search order, ASIN, SKU…" className="input" style={{flex:'1 0 150px',minWidth:100,maxWidth:'40vw',padding:'8px 10px',fontSize:'16px',height:38,borderRadius:8}} />
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search order, ASIN, SKU…" className="input" style={{flex:'0 1 200px',padding:'8px 10px',fontSize:'16px',height:38,borderRadius:8}} />
         
-        <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 1 120px',minWidth:100,padding:'8px 10px',fontSize:'16px',height:38,borderRadius:8}}>
+        <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 1 140px',padding:'8px 10px',fontSize:'16px',height:38,borderRadius:8}}>
           <option value="">All Suppliers</option>
           {[...new Set(orders.filter(o=>o.buyLink).map(o=>getSupplier(o.buyLink).name))].sort().map(s=>(
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
         
-        <input type="date" value={deliveryDateFilter} onChange={e=>setDeliveryDateFilter(e.target.value)} className="input" style={{flex:'0 1 130px',minWidth:100,padding:'8px 10px',fontSize:'16px',height:38,borderRadius:8}} title="Filter by expected delivery date"/>
+        <input type="date" value={deliveryDateFilter} onChange={e=>setDeliveryDateFilter(e.target.value)} className="input" style={{flex:'0 1 150px',padding:'8px 10px',fontSize:'16px',height:38,borderRadius:8}} title="Filter by expected delivery date"/>
         
-        <div style={{display:'flex',gap:6,background:'rgba(255,255,255,0.02)',borderRadius:7,padding:4,flexWrap:'wrap',alignItems:'center',flex:'1 0 auto'}}>
+        <div style={{display:'flex',gap:6,background:'rgba(255,255,255,0.02)',borderRadius:7,padding:4,flexWrap:'wrap',alignItems:'center'}}>
           {FILTERS.map(f=>(
             <button key={f.k} onClick={()=>setFilter(f.k)} style={{background:filter===f.k?'rgba(29,78,216,0.55)':'transparent',border:'none',color:filter===f.k?'#fff':f.c||'#334155',borderRadius:5,padding:'6px 10px',fontSize:10,cursor:'pointer',fontWeight:700,transition:'all .12s',whiteSpace:'nowrap',height:28,display:'flex',alignItems:'center'}}>
               {f.l}
@@ -2730,7 +2776,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
           ))}
         </div>
         
-        {(supplierFilter||deliveryDateFilter)&&<button onClick={()=>{setSupplierFilter('');setDeliveryDateFilter('');}} style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',borderRadius:5,padding:'6px 10px',fontSize:10,cursor:'pointer',fontWeight:700,height:28,display:'flex',alignItems:'center',flex:'0 0 auto'}}>✕ Clear</button>}
+        {(supplierFilter||deliveryDateFilter)&&<button onClick={()=>{setSupplierFilter('');setDeliveryDateFilter('');}} style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',borderRadius:5,padding:'6px 10px',fontSize:10,cursor:'pointer',fontWeight:700,height:28,display:'flex',alignItems:'center'}}>✕ Clear</button>}
       </div>
 
       {/* Table - Pagination */}
