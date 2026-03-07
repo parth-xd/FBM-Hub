@@ -152,7 +152,6 @@ div[role="filters"] > button {
 @media (max-width: 768px) {
   /* Hide non-essential columns on tablet */
   th[data-col="hts"], td[data-col="hts"],
-  th[data-col="links"], td[data-col="links"],
   th[data-col="profit"], td[data-col="profit"] {
     display: none;
   }
@@ -2756,7 +2755,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
 
       {/* Filters + Search - Apple-style compact */}
       <div role="filters" style={{display:'flex',gap:6,padding:'8px 14px',borderBottom:'1px solid rgba(255,255,255,0.05)',flexWrap:'nowrap',alignItems:'center',backgroundColor:'#0a0f1a',width:'100%',boxSizing:'border-box',overflow:'hidden'}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" className="input" style={{flex:'1 1 80px',minWidth:80,padding:'5px 10px',fontSize:'16px',height:32,borderRadius:8,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)'}} />
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" className="input" style={{flex:'1 1 80px',minWidth:80,padding:'5px 8px',fontSize:'16px',height:32,borderRadius:8,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)'}} />
         
         <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 0 100px',padding:'5px 8px',fontSize:'16px',height:32,borderRadius:8,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)'}}>
           <option value="">Suppliers</option>
