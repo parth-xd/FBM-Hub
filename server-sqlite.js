@@ -317,7 +317,7 @@ app.post('/api/orders/:id', async (req, res) => {
       values.push(val);
     });
 
-    updateFields.push('updated_at = datetime("now")');
+    updateFields.push("updated_at = datetime('now')");
     updateFields.push('updated_by = ?');
     values.push(userEmail);
     values.push(id);
@@ -326,13 +326,17 @@ app.post('/api/orders/:id', async (req, res) => {
     const updateStmt = db.prepare(updateSQL);
     updateStmt.run(...values);
 
-    // Log changes
-    Object.entries(updates).forEach(([key, val]) => {
-      if (String(oldData[key]) !== String(val)) {
-        const auditStmt = db.prepare('INSERT INTO audit_logs (order_id, user_email, action, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)');
-        auditStmt.run(id, userEmail, 'UPDATE', key, String(oldData[key] || ''), String(val || ''));
-      }
-    });
+    // Log changes (with graceful fallback if audit_logs doesn't exist)
+    try {
+      Object.entries(updates).forEach(([key, val]) => {
+        if (String(oldData[key]) !== String(val)) {
+          const auditStmt = db.prepare('INSERT INTO audit_logs (order_id, user_email, action, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)');
+          auditStmt.run(id, userEmail, 'UPDATE', key, String(oldData[key] || ''), String(val || ''));
+        }
+      });
+    } catch (auditErr) {
+      console.warn('Audit logging skipped:', auditErr.message);
+    }
 
     const newStmt = db.prepare('SELECT * FROM orders WHERE id = ?');
     const newData = newStmt.get(id);
