@@ -3265,20 +3265,65 @@ function App() {
     setTimeout(() => setWriteToast(null), 3000);
   }, []);
 
-  const syncCell = React.useCallback(async(sheetRow, colIdx, value) => {
-    // Use the batching write system that flushes every 5 seconds
-    const id = sheetRow || window.SHEET_ID || process.env.SPREADSHEET_ID;
-    const cellRef = `Main STB Expenses!${colLetter(colIdx)}${sheetRow}`;
-    if (!window._pendingWrites) window._pendingWrites = [];
-    window._pendingWrites.push({spreadsheetId: window.SHEET_ID, range: cellRef, values: [[value]]});
-  }, []);
+  const syncCell = React.useCallback(async(orderId, fieldName, value) => {
+    try {
+      const base = window.API_BASE || '';
+      const userEmail = currentUser?.email || 'unknown';
+      
+      // Find the order to get its database ID
+      const order = orders.find(o => o.id === orderId || o.sheetRow === orderId);
+      if (!order) {
+        console.error('Order not found:', orderId);
+        return;
+      }
+
+      // Map column indices to field names (for backward compatibility)
+      const fieldMap = {
+        24: 'weight',          // Weight column
+        28: 'qty_received',    // Qty Received column
+        31: 'label_printed',   // Label Printed column
+        32: 'exception_reason',
+        34: 'exception_po_created'
+      };
+      
+      const field = typeof fieldName === 'number' ? fieldMap[fieldName] : fieldName;
+      
+      // Convert values for SQL
+      let updateValue = value;
+      if (field === 'label_printed' || field === 'exception_po_created') {
+        updateValue = value === 'TRUE' || value === true ? true : false;
+      }
+
+      console.log(`📤 Syncing to SQL: Order ${order.id}, ${field} = ${updateValue}`);
+      
+      const res = await fetch(`${base}/api/orders/${order.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': userEmail
+        },
+        body: JSON.stringify({[field]: updateValue})
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to sync: ${res.status}`);
+      }
+
+      setWriteToast({ok: true, msg: `✓ Saved to database`});
+      setTimeout(() => setWriteToast(null), 2000);
+    } catch(e) {
+      console.error('Sync error:', e);
+      setWriteToast({ok: false, msg: `Write failed: ${e.message}`});
+      setTimeout(() => setWriteToast(null), 3000);
+    }
+  }, [orders, currentUser]);
 
   // Listen for write status events
   React.useEffect(() => {
     const handler = (e) => {
       const {ok, count} = e.detail;
       if(ok){
-        setWriteToast({ok:true, msg:`✓ Saved ${count} change${count>1?'s':''} to sheet`});
+        setWriteToast({ok:true, msg:`✓ Saved ${count} change${count>1?'s':''}`});
       } else {
         setWriteToast({ok:false, msg:'⚠ Write failed'});
       }
@@ -3334,214 +3379,151 @@ function App() {
   }, [orderHistory, orders, syncCell]);
 
   async function loadOrders() {
-    if (!window.SHEET_ID) {
-      console.warn('⚠ No sheet ID set, cannot load orders');
-      setSyncStatus('error');
-      setSyncError('Sheet ID not configured');
-      return;
-    }
-
     setSyncStatus('syncing');
-    console.log('📥 Loading orders from sheet:', window.SHEET_ID);
-    let rows = [];
+    console.log('📥 Loading orders from SQL database...');
+    
     try {
-      // Fetch data from backend which reads from Google Sheets (with 120s timeout - sheets API can be slow)
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120000);
-      
-      try {
-        console.log('Fetching from:', `${window.API_BASE}/api/read?spreadsheetId=${window.SHEET_ID}`);
-        const res = await fetch(`${window.API_BASE}/api/read?spreadsheetId=${encodeURIComponent(window.SHEET_ID)}&range=Main%20STB%20Expenses!A3:AN`, {signal: controller.signal});
-        clearTimeout(timeout);
-        
-        if (!res.ok) {
-          const errorText = await res.text().catch(() => '');
-          console.error('Backend error response:', res.status, errorText);
-          throw new Error(`Backend error: ${res.status} - ${res.statusText}. ${errorText}`);
-        }
-        
-        const data = await res.json();
-        rows = data.values || [];
-        console.log('✓ Fetched', rows.length, 'rows from sheet');
-      } catch (fetchErr) {
-        clearTimeout(timeout);
-        if (fetchErr.name === 'AbortError') {
-          throw new Error('Request timeout (120s) - server may be too slow or sheets API connection issue');
-        }
-        throw fetchErr;
+      const base = window.API_BASE || '';
+      const offset = 0;
+      const limit = 100; // Load first 100, more on scroll
+
+      const res = await fetch(`${base}/api/orders?offset=${offset}&limit=${limit}`);
+      if (!res.ok) {
+        throw new Error(`Backend error: ${res.status}`);
       }
+
+      const data = await res.json();
+      const orders = data.orders || [];
       
-      if (!rows || rows.length === 0) {
-        console.warn('⚠ No orders found in sheet');
-        setSyncStatus('synced');
-        setOrders([]);
-        return;
-      }
+      console.log(`✓ Loaded ${orders.length} orders from SQL database`);
       
-      // Helper to parse numbers (handles currency symbols, etc)
-      const parseNum = (val) => {
-        if (!val) return null;
-        const str = String(val);
-        const cleaned = str.replace(/[£€$]/g, '').replace(/~~[^~]*~~/g, '').trim();
-        const matches = cleaned.match(/[\d.]+/g);
-        if (matches && matches.length > 0) {
-          const nums = matches.map(Number).filter(n => !isNaN(n));
-          return nums.length > 0 ? Math.max(...nums) : null;
-        }
-        return null;
-      };
-      
-      // Parse the rows into order objects
-      const parsed = rows.map((r, i) => {
-        const orderId = r[2] || null;
-        return {
-          id: i + 1,
-          sheetRow: i + 3,
-          orderId: orderId,
-          orderDate: r[1] || null,
-          productName: r[7] || null,
-          totalSellPrice: parseNum(r[9]),
-          totalBuyPriceIncVAT: parseNum(r[18]),
-          totalBuyPriceExcVAT: parseNum(r[20]),
-          shippingCostGBP: parseNum(r[22]),
-          expectedProfit: parseNum(r[23]),
-          suggestedWeight: parseNum(r[19]),
-          weight: parseNum(r[19]),
-          labelPrinted: r[31] === 'TRUE' || r[31] === true,
-          status: r[31] === 'TRUE' ? 'packed' : 'pending',
-          isDHL: String(r[30] || '').toUpperCase() === 'DHL',
-          poId: r[14] || null,
-          sQty: parseNum(r[6]),
-          bQty: parseNum(r[15]),
-          qtyReceived: parseNum(r[28]),
-          discrepancy: parseNum(r[29]),
-          exceptionReason: r[32] || null,
-          exceptionStockSolution: r[33] || null,
-          exceptionPOCreated: r[34] === 'TRUE' || r[34] === true,
-          goodsNotAvailable: r[35] === 'TRUE' || r[35] === true,
-          shipByDate: r[9] || null,
-          expectedDeliveryDate: r[26] || null,
-          purchasedBy: r[10] || null,
-          checkedBy: r[11] || null,
-          buyLink: r[13] || null,
-          asin: r[4] || null,
-          sku: r[5] || null,
-          amazonLink: orderId ? `https://sellercentral.amazon.com/orders-v3/order/${orderId}` : null,
-          shipStationLink: r[33] || null,
-          beingEdited: false
-        };
-      }).filter(o => o.productName || o.orderId);
-      
+      // Convert snake_case from SQL to camelCase for frontend
+      const parsed = orders.map(order => ({
+        id: order.id,
+        sheetRow: order.sheet_row,
+        orderId: order.order_id,
+        orderDate: order.order_date,
+        productName: order.product_name,
+        totalSellPrice: order.total_sell_price,
+        totalBuyPriceIncVAT: order.total_buy_price_inc_vat,
+        totalBuyPriceExcVAT: order.total_buy_price_exc_vat,
+        shippingCostGBP: order.shipping_cost_gbp,
+        expectedProfit: order.expected_profit,
+        suggestedWeight: order.suggested_weight,
+        weight: order.weight,
+        labelPrinted: order.label_printed,
+        status: order.status,
+        isDHL: order.is_dhl,
+        poId: order.po_id,
+        sQty: order.s_qty,
+        bQty: order.b_qty,
+        qtyReceived: order.qty_received,
+        discrepancy: order.discrepancy,
+        exceptionReason: order.exception_reason,
+        exceptionStockSolution: order.exception_stock_solution,
+        exceptionPOCreated: order.exception_po_created,
+        goodsNotAvailable: order.goods_not_available,
+        shipByDate: order.ship_by_date,
+        expectedDeliveryDate: order.expected_delivery_date,
+        purchasedBy: order.purchased_by,
+        checkedBy: order.checked_by,
+        buyLink: order.buy_link,
+        asin: order.asin,
+        sku: order.sku,
+        amazonLink: order.order_id ? `https://sellercentral.amazon.com/orders-v3/order/${order.order_id}` : null,
+        shipStationLink: order.shipstation_link,
+        beingEdited: false
+      }));
+
       setOrders(parsed);
-      setOrderHistory([parsed]); // Initialize undo history
+      setOrderHistory([parsed]);
       setSyncStatus('synced');
       setLastSync(new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}));
       setSyncError(null);
       console.log(`✓ Loaded ${parsed.length} orders`);
     } catch (err) {
-      console.error('❌ Load orders error:', err.message || err);
+      console.error('❌ Load orders error:', err.message);
       setSyncStatus('error');
       setSyncError(err.message || 'Failed to load orders');
-      // Keep existing cached orders instead of using fallback demo data
-      console.log(`⚠ Using cached data, total orders: ${orders.length}`);
     }
   }
 
-  // Load initially when sheet is connected (no login required for API read)
+  // Load initially when user is logged in
   React.useEffect(()=>{
-    if(!sheetConnected) {
-      console.log('⏳ Waiting for sheet connection...');
-      return;
-    }
-    console.log('✓ Sheet connected, starting order load...');
+    if(!currentUser) return;
+    console.log('✓ User logged in, loading orders from SQL...');
     loadOrders();
-  },[sheetConnected]);
+  },[currentUser]);
 
-  // Smart polling: refresh from sheet every 15s without overwriting in-progress local edits
-  const pollingRef = React.useRef(false);
+  // WebSocket real-time sync (replaces polling)
   React.useEffect(()=>{
-    if(!sheetConnected || !currentUser) return;
-    
-    const pollInterval = setInterval(async () => {
-      if(pollingRef.current) return; // Skip if a poll is already running
-      pollingRef.current = true;
+    if(!currentUser) return;
+
+    // Determine WebSocket URL
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = window.API_BASE 
+      ? `${window.API_BASE.replace(/^https?/, protocol).replace(/\/$/, '')}`
+      : `${protocol}//${window.location.host}`;
+
+    console.log('🔌 Connecting to WebSocket:', wsUrl);
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('✅ WebSocket connected - real-time sync active');
+      setSyncStatus('synced');
+    };
+
+    ws.onmessage = (event) => {
       try {
-        const base = window.API_BASE || '';
-        const res = await fetch(`${base}/api/read?spreadsheetId=${encodeURIComponent(window.SHEET_ID)}&range=Main%20STB%20Expenses!A3:AN`);
-        if(!res.ok) { pollingRef.current = false; return; }
-        const data = await res.json();
-        const rows = data.values || [];
-        if(rows.length === 0) { pollingRef.current = false; return; }
+        const message = JSON.parse(event.data);
         
-        const parseNum = (val) => {
-          if (!val) return null;
-          const str = String(val);
-          const cleaned = str.replace(/[£€$]/g, '').replace(/~~[^~]*~~/g, '').trim();
-          const matches = cleaned.match(/[\d.]+/g);
-          if (matches && matches.length > 0) {
-            const nums = matches.map(Number).filter(n => !isNaN(n));
-            return nums.length > 0 ? Math.max(...nums) : null;
-          }
-          return null;
-        };
-        
-        // Build fresh data from sheet, but preserve local-only fields
-        setOrders(prev => {
-          const prevMap = new Map(prev.map(o => [o.sheetRow, o]));
-          const fresh = rows.map((r, i) => {
-            const sheetRow = i + 3;
-            const orderId = r[2] || null;
-            const existing = prevMap.get(sheetRow);
-            return {
-              id: i + 1,
-              sheetRow,
-              orderId,
-              orderDate: r[1] || null,
-              productName: r[7] || null,
-              totalSellPrice: parseNum(r[9]),
-              totalBuyPriceIncVAT: parseNum(r[18]),
-              totalBuyPriceExcVAT: parseNum(r[20]),
-              shippingCostGBP: parseNum(r[22]),
-              expectedProfit: parseNum(r[23]),
-              suggestedWeight: parseNum(r[19]),
-              weight: existing?.weight ?? parseNum(r[19]),
-              labelPrinted: r[31] === 'TRUE' || r[31] === true,
-              status: r[31] === 'TRUE' ? 'packed' : 'pending',
-              isDHL: String(r[30] || '').toUpperCase() === 'DHL',
-              poId: r[14] || null,
-              sQty: parseNum(r[6]),
-              bQty: parseNum(r[15]),
-              qtyReceived: parseNum(r[28]),
-              discrepancy: parseNum(r[29]),
-              exceptionReason: r[32] || null,
-              exceptionStockSolution: r[33] || null,
-              exceptionPOCreated: r[34] === 'TRUE' || r[34] === true,
-              goodsNotAvailable: r[35] === 'TRUE' || r[35] === true,
-              shipByDate: r[9] || null,
-              expectedDeliveryDate: r[26] || null,
-              purchasedBy: r[10] || null,
-              checkedBy: r[11] || null,
-              buyLink: r[13] || null,
-              asin: r[4] || null,
-              sku: r[5] || null,
-              amazonLink: orderId ? `https://sellercentral.amazon.com/orders-v3/order/${orderId}` : null,
-              shipStationLink: r[33] || null,
-              beingEdited: existing?.beingEdited || false
-            };
-          }).filter(o => o.productName || o.orderId);
-          return fresh;
-        });
-        setSyncStatus('synced');
-        setLastSync(new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}));
+        if (message.type === 'order-updated') {
+          // Real-time update from another user
+          const { id, newData } = message.data;
+          console.log(`🔄 Real-time update from ${message.data.updatedBy}:`, newData);
+          
+          setOrders(prev => prev.map(order => 
+            order.id === id ? {
+              ...order,
+              weight: newData.weight ?? order.weight,
+              status: newData.status ?? order.status,
+              labelPrinted: newData.label_printed !== undefined ? newData.label_printed : order.labelPrinted,
+              qtyReceived: newData.qty_received ?? order.qtyReceived,
+              discrepancy: newData.discrepancy ?? order.discrepancy,
+              ...newData
+            } : order
+          ));
+          
+          // Update sync status
+          setLastSync(new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}));
+          setSyncStatus('synced');
+        }
       } catch(e) {
-        console.error('Polling error:', e);
-      } finally {
-        pollingRef.current = false;
+        console.error('WebSocket message error:', e);
       }
-    }, 15000); // Poll every 15 seconds — fast enough for collaboration, gentle on API
-    
-    return () => clearInterval(pollInterval);
-  },[sheetConnected, currentUser]);
+    };
+
+    ws.onerror = (error) => {
+      console.error('❌ WebSocket error:', error);
+      setSyncStatus('error');
+      setSyncError('Real-time sync connection failed');
+    };
+
+    ws.onclose = () => {
+      console.log('❌ WebSocket disconnected');
+      setSyncStatus('disconnected');
+      // Auto-reconnect after 3 seconds
+      setTimeout(() => {
+        console.log('🔄 Attempting to reconnect WebSocket...');
+      }, 3000);
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
+  },[currentUser]);
 
   function handleLogin(user) {
     console.log('👤 User logged in:', user.email);
