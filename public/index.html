@@ -72,6 +72,9 @@ tr.datarow:hover td{filter:brightness(1.12)}
   .section-title { font-size: 10px; margin-bottom: 8px; }
   .kv { padding: 8px 10px; }
   .kv .kval { font-size: 13px; }
+  
+  /* App-like mobile layout */
+  #root > div > div:nth-child(1) { height: 50px; padding: 0 10px !important; }
 }
 
 @media (max-width: 480px) {
@@ -161,8 +164,9 @@ tr.datarow:hover td{filter:brightness(1.12)}
 }
 
 /* ═══ MOBILE MENU (Apple-style) ═══ */
-@keyframes slideInMenu { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideInMenu { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rotateHamburger { from { transform: scale(1) rotate(0deg); } to { transform: scale(1) rotate(90deg); } }
 
 .mobile-menu-overlay {
   position: fixed;
@@ -172,14 +176,13 @@ tr.datarow:hover td{filter:brightness(1.12)}
   -webkit-backdrop-filter: blur(10px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   z-index: 150;
 }
 
 .mobile-menu-overlay.active {
   opacity: 1;
   pointer-events: auto;
-  animation: fadeInOverlay 0.3s ease;
 }
 
 .mobile-menu-panel {
@@ -195,36 +198,38 @@ tr.datarow:hover td{filter:brightness(1.12)}
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   z-index: 160;
   transform: translateX(-100%);
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   overflow-y: auto;
   padding-top: 70px;
+  will-change: transform;
 }
 
 .mobile-menu-panel.active {
   transform: translateX(0);
-  animation: slideInMenu 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .mobile-menu-item {
   display: block;
   width: 100%;
-  padding: 16px 20px;
+  padding: 14px 20px;
   border: none;
   background: none;
   color: #cbd5e1;
   text-align: left;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border-left: 3px solid transparent;
   font-family: inherit;
   letter-spacing: -0.02em;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-.mobile-menu-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #f1f5f9;
+.mobile-menu-item:active {
+  background: rgba(96, 165, 250, 0.15);
+  transform: translateX(4px);
 }
 
 .mobile-menu-item.active {
@@ -233,15 +238,10 @@ tr.datarow:hover td{filter:brightness(1.12)}
   color: #60a5fa;
 }
 
-.mobile-menu-item:active {
-  background: rgba(255, 255, 255, 0.1);
-  transform: scale(0.98);
-}
-
 .mobile-menu-divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
-  margin: 8px 0;
+  margin: 10px 0;
 }
 
 .hamburger-btn {
@@ -249,32 +249,51 @@ tr.datarow:hover td{filter:brightness(1.12)}
   background: none;
   border: none;
   color: #cbd5e1;
-  font-size: 20px;
+  font-size: 22px;
   cursor: pointer;
-  padding: 8px 12px;
-  margin-right: 8px;
-  transition: all 0.2s ease;
+  padding: 6px 8px;
+  margin-right: 4px;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   z-index: 170;
-}
-
-.hamburger-btn:hover {
-  color: #f1f5f9;
+  -webkit-user-select: none;
+  user-select: none;
+  width: 40px;
+  height: 40px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
 }
 
 .hamburger-btn:active {
-  transform: scale(0.95);
+  color: #60a5fa;
+  transform: scale(0.92);
 }
 
 /* Hide nav tabs and show hamburger on mobile */
 @media (max-width: 768px) {
   .hamburger-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex !important;
   }
   
   .desktop-nav-tabs {
+    display: none !important;
+  }
+  
+  /* Compress header on mobile */
+  .header-sync-status {
+    display: none !important;
+  }
+  
+  .header-user-pill {
+    display: none !important;
+  }
+  
+  .header-logo-full {
     display: none;
+  }
+  
+  .header-logo-compact {
+    display: flex !important;
   }
 }
 </style>
@@ -3321,13 +3340,18 @@ function App() {
             {mobileMenuOpen?'✕':'☰'}
           </button>
 
-          {/* Logo */}
-          <div style={{display:'flex',alignItems:'center',gap:9,marginRight:8}}>
+          {/* Logo - Full version (desktop) */}
+          <div style={{display:'flex',alignItems:'center',gap:9,marginRight:8}} className="header-logo-full">
             <div style={{width:34,height:34,background:'linear-gradient(135deg,#1d4ed8,#0ea5e9)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:17}}>📦</div>
             <div>
               <div style={{fontWeight:800,fontSize:14,color:'#f1f5f9',letterSpacing:'-0.02em',lineHeight:1.1}}>FBM Ops Hub</div>
               <div style={{fontSize:8,color:'#1e3a5f',letterSpacing:'.08em',textTransform:'uppercase'}}>Babaclick UK→US</div>
             </div>
+          </div>
+
+          {/* Logo - Compact version (mobile) */}
+          <div style={{display:'none',alignItems:'center',gap:6,marginRight:6}} className="header-logo-compact">
+            <div style={{width:32,height:32,background:'linear-gradient(135deg,#1d4ed8,#0ea5e9)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>📦</div>
           </div>
 
           {/* Nav tabs - Desktop only */}
@@ -3337,15 +3361,15 @@ function App() {
 
           <div style={{flex:1}}/>
 
-          {/* Alerts */}
+          {/* Alerts - Desktop only */}
           {/* Sync */}
-          <div style={{display:'flex',alignItems:'center',gap:7,padding:'4px 12px',background:syncStatus==='syncing'?'rgba(251,191,36,0.1)':syncStatus==='error'?'rgba(239,68,68,0.1)':'transparent',borderRadius:6}}>
+          <div style={{display:'flex',alignItems:'center',gap:7,padding:'4px 12px',background:syncStatus==='syncing'?'rgba(251,191,36,0.1)':syncStatus==='error'?'rgba(239,68,68,0.1)':'transparent',borderRadius:6}} className="header-sync-status">
             <div style={{width:7,height:7,borderRadius:'50%',background:syncStatus==='syncing'?'#fbbf24':syncStatus==='synced'?'#22c55e':'#ef4444',animation:syncStatus==='syncing'?'pulse 1s infinite':undefined}}/>
             <span style={{fontSize:10,color:syncStatus==='error'?'#ef4444':'#1e3a5f'}}>{syncStatus==='syncing'?'Syncing…':syncStatus==='error'?`Error: ${syncError||'Check logs'}`:syncStatus==='synced'?'Connected':'Not connected'}</span>
           </div>
 
-          {/* User pill */}
-          <div style={{display:'flex',alignItems:'center',gap:7,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:7,padding:'5px 11px'}}>
+          {/* User pill - Desktop only */}
+          <div style={{display:'flex',alignItems:'center',gap:7,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:7,padding:'5px 11px'}} className="header-user-pill">
             <div style={{width:7,height:7,borderRadius:'50%',background:ri.color}}/>
             <span style={{fontSize:12,color:'#cbd5e1',fontWeight:600}}>{currentUser?.name}</span>
             <span style={{fontSize:9,color:ri.color,fontWeight:700,textTransform:'uppercase'}}>{ri.label}</span>
@@ -3361,6 +3385,22 @@ function App() {
 
       {/* Mobile Menu Panel */}
       <div className={`mobile-menu-panel ${mobileMenuOpen?'active':''}`}>
+        {/* User Status at top of menu */}
+        <div style={{padding:'12px 20px',borderBottom:'1px solid rgba(255,255,255,0.06)',marginBottom:4}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+            <div style={{width:10,height:10,borderRadius:'50%',background:syncStatus==='syncing'?'#fbbf24':syncStatus==='synced'?'#22c55e':'#ef4444',animation:syncStatus==='syncing'?'pulse 1s infinite':undefined}}/>
+            <span style={{fontSize:11,color:syncStatus==='error'?'#ef4444':'#cbd5e1'}}>{syncStatus==='syncing'?'Syncing…':syncStatus==='error'?`Error: ${syncError||'Check logs'}`:syncStatus==='synced'?'Connected':'Not connected'}</span>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <div style={{width:8,height:8,borderRadius:'50%',background:ri.color}}/>
+            <div>
+              <div style={{fontSize:12,color:'#f1f5f9',fontWeight:600}}>{currentUser?.name}</div>
+              <div style={{fontSize:10,color:ri.color,fontWeight:700,textTransform:'uppercase',marginTop:2}}>{ri.label}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Items */}
         {TABS.map(t=>(
           <button 
             key={t.k} 
