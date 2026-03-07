@@ -2428,43 +2428,58 @@ function IssuesView({orders, multiPOs}) {
 function UserManageModal({accounts,onSave,onClose}) {
   const [accs,setAccs]=useState(accounts.map(a=>({...a})));
   const [n,setN]=useState({name:'',username:'',password:'',role:'packer'});
+  
+  const handleUpdateAccount = (i, field, value) => {
+    const c=[...accs];
+    c[i]={...c[i],[field]:value};
+    setAccs(c);
+  };
+  
+  const handleRemoveAccount = (i) => {
+    setAccs(p=>p.filter((_,j)=>j!==i));
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box fadeIn" style={{border:'1px solid rgba(255,255,255,0.1)',maxWidth:600,maxHeight:'85vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
-        <div style={{padding:'18px 22px',borderBottom:'1px solid rgba(255,255,255,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,backgroundColor:'#0b1526',zIndex:10}}>
+      <div className="modal-box fadeIn" style={{border:'1px solid rgba(255,255,255,0.1)',maxWidth:700,maxHeight:'90vh',display:'flex',flexDirection:'column'}} onClick={e=>e.stopPropagation()}>
+        <div style={{padding:'16px',borderBottom:'1px solid rgba(255,255,255,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,backgroundColor:'#0b1526',zIndex:10,minHeight:50}}>
           <div style={{fontWeight:800,fontSize:14,color:'#f1f5f9'}}>👥 Team Accounts</div>
-          <button onClick={onClose} style={{background:'rgba(255,255,255,0.06)',border:'none',color:'#475569',borderRadius:7,width:28,height:28,cursor:'pointer',fontSize:14}}>✕</button>
+          <button onClick={onClose} style={{background:'rgba(255,255,255,0.06)',border:'none',color:'#475569',borderRadius:7,width:30,height:30,cursor:'pointer',fontSize:16,padding:0,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
         </div>
-        <div style={{padding:'16px 20px'}}>
-          {/* Accounts List */}
+        
+        <div style={{flex:1,overflowY:'auto',padding:'16px'}}>
+          {/* Existing Accounts Section */}
           <div style={{marginBottom:20}}>
-            <div style={{fontSize:11,fontWeight:700,color:'#334155',textTransform:'uppercase',marginBottom:10}}>Existing Accounts</div>
-            {accs.length===0?<div style={{color:'#1e3a5f',fontSize:12,padding:'12px'}}>No accounts yet</div>:(
-              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#334155',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:12}}>Existing Accounts ({accs.length})</div>
+            {accs.length===0?(
+              <div style={{color:'#1e3a5f',fontSize:12,padding:'12px',background:'rgba(255,255,255,0.02)',borderRadius:6}}>No accounts yet. Add one below.</div>
+            ):(
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
                 {accs.map((a,i)=>(
-                  <div key={a.id} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)',borderRadius:8,padding:'10px 12px',display:'flex',flexDirection:'column',gap:8}}>
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                      <div>
-                        <label style={{fontSize:9,color:'#334155',fontWeight:700}}>Name</label>
-                        <input className="input" style={{padding:'6px 8px',fontSize:11,marginTop:4}} value={a.name} onChange={e=>{const c=[...accs];c[i]={...c[i],name:e.target.value};setAccs(c);}}/>
-                      </div>
-                      <div>
-                        <label style={{fontSize:9,color:'#334155',fontWeight:700}}>Role</label>
-                        <select value={a.role} onChange={e=>{const c=[...accs];c[i]={...c[i],role:e.target.value};setAccs(c);}} style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,color:'#e2e8f0',padding:'6px 8px',fontSize:11,width:'100%',marginTop:4}}>
-                          <option value="owner">Owner</option><option value="importer">Importer</option><option value="packer">Packer</option><option value="viewer">Viewer</option>
-                        </select>
-                      </div>
+                  <div key={a.id} style={{background:'rgba(255,255,255,0.024)',border:'1px solid rgba(255,255,255,0.06)',borderRadius:8,padding:'12px',display:'grid',gap:10,gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))'}}>
+                    <div>
+                      <label style={{fontSize:8,color:'#334155',fontWeight:700,textTransform:'uppercase',marginBottom:4,display:'block'}}>Name</label>
+                      <input className="input" style={{padding:'7px 8px',fontSize:11,width:'100%'}} value={a.name} onChange={e=>handleUpdateAccount(i,'name',e.target.value)} placeholder="Name"/>
                     </div>
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:8,alignItems:'flex-end'}}>
-                      <div>
-                        <label style={{fontSize:9,color:'#334155',fontWeight:700}}>Username</label>
-                        <input className="input" style={{padding:'6px 8px',fontSize:11,marginTop:4}} value={a.username} onChange={e=>{const c=[...accs];c[i]={...c[i],username:e.target.value};setAccs(c);}}/>
-                      </div>
-                      <div>
-                        <label style={{fontSize:9,color:'#334155',fontWeight:700}}>Password</label>
-                        <input className="input" style={{padding:'6px 8px',fontSize:11,marginTop:4}} value={a.password} onChange={e=>{const c=[...accs];c[i]={...c[i],password:e.target.value};setAccs(c);}}/>
-                      </div>
-                      <button onClick={()=>setAccs(p=>p.filter((_,j)=>j!==i))} style={{background:'rgba(239,68,68,0.12)',border:'none',color:'#ef4444',borderRadius:5,padding:'6px 10px',cursor:'pointer',fontSize:11,fontWeight:700,minWidth:40}}>Remove</button>
+                    <div>
+                      <label style={{fontSize:8,color:'#334155',fontWeight:700,textTransform:'uppercase',marginBottom:4,display:'block'}}>Username</label>
+                      <input className="input" style={{padding:'7px 8px',fontSize:11,width:'100%'}} value={a.username} onChange={e=>handleUpdateAccount(i,'username',e.target.value)} placeholder="Username"/>
+                    </div>
+                    <div>
+                      <label style={{fontSize:8,color:'#334155',fontWeight:700,textTransform:'uppercase',marginBottom:4,display:'block'}}>Password</label>
+                      <input className="input" style={{padding:'7px 8px',fontSize:11,width:'100%'}} value={a.password} onChange={e=>handleUpdateAccount(i,'password',e.target.value)} placeholder="Password"/>
+                    </div>
+                    <div>
+                      <label style={{fontSize:8,color:'#334155',fontWeight:700,textTransform:'uppercase',marginBottom:4,display:'block'}}>Role</label>
+                      <select value={a.role} onChange={e=>handleUpdateAccount(i,'role',e.target.value)} style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,color:'#e2e8f0',padding:'7px 8px',fontSize:11,width:'100%'}}>
+                        <option value="owner">Owner</option>
+                        <option value="importer">Importer</option>
+                        <option value="packer">Packer</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    </div>
+                    <div style={{display:'flex',alignItems:'flex-end'}}>
+                      <button onClick={()=>handleRemoveAccount(i)} style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',borderRadius:6,padding:'7px 12px',cursor:'pointer',fontSize:11,fontWeight:700,width:'100%'}}>✕ Remove</button>
                     </div>
                   </div>
                 ))}
@@ -2472,25 +2487,44 @@ function UserManageModal({accounts,onSave,onClose}) {
             )}
           </div>
 
-          {/* Add New Account */}
-          <div style={{background:'rgba(255,255,255,0.02)',borderRadius:8,padding:'14px',border:'1px solid rgba(255,255,255,0.05)'}}>
-            <div style={{fontSize:11,fontWeight:700,color:'#334155',textTransform:'uppercase',marginBottom:10}}>Add New Account</div>
-            <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              <input className="input" style={{padding:'8px 10px',fontSize:11}} placeholder="Full Name" value={n.name} onChange={e=>setN(p=>({...p,name:e.target.value}))}/>
-              <input className="input" style={{padding:'8px 10px',fontSize:11}} placeholder="Username" value={n.username} onChange={e=>setN(p=>({...p,username:e.target.value}))}/>
-              <input className="input" style={{padding:'8px 10px',fontSize:11}} placeholder="Password" value={n.password} onChange={e=>setN(p=>({...p,password:e.target.value}))}/>
-              <select value={n.role} onChange={e=>setN(p=>({...p,role:e.target.value}))} style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,color:'#e2e8f0',padding:'8px 10px',fontSize:11}}>
-                <option value="owner">Owner</option><option value="importer">Importer</option><option value="packer">Packer</option><option value="viewer">Viewer</option>
-              </select>
-              <button className="btn" style={{background:'#1d4ed8',color:'#fff',padding:'8px 12px',fontSize:12,width:'100%'}} onClick={()=>{if(n.username&&n.password){setAccs(p=>[...p,{...n,id:Date.now()}]);setN({name:'',username:'',password:'',role:'packer'});}}}>+ Add Account</button>
+          <div style={{height:'1px',background:'rgba(255,255,255,0.05)',margin:'20px 0'}}/>
+
+          {/* Add New Account Section */}
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:'#334155',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:12}}>Add New Account</div>
+            <div style={{background:'rgba(255,255,255,0.02)',borderRadius:8,padding:'14px',border:'1px solid rgba(255,255,255,0.05)',display:'grid',gap:10,gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))'}}>
+              <div>
+                <label style={{fontSize:8,color:'#334155',fontWeight:700,textTransform:'uppercase',marginBottom:4,display:'block'}}>Full Name</label>
+                <input className="input" style={{padding:'8px 10px',fontSize:11,width:'100%'}} placeholder="Full Name" value={n.name} onChange={e=>setN(p=>({...p,name:e.target.value}))}/>
+              </div>
+              <div>
+                <label style={{fontSize:8,color:'#334155',fontWeight:700,textTransform:'uppercase',marginBottom:4,display:'block'}}>Username</label>
+                <input className="input" style={{padding:'8px 10px',fontSize:11,width:'100%'}} placeholder="Username" value={n.username} onChange={e=>setN(p=>({...p,username:e.target.value}))}/>
+              </div>
+              <div>
+                <label style={{fontSize:8,color:'#334155',fontWeight:700,textTransform:'uppercase',marginBottom:4,display:'block'}}>Password</label>
+                <input className="input" style={{padding:'8px 10px',fontSize:11,width:'100%'}} placeholder="Password" value={n.password} onChange={e=>setN(p=>({...p,password:e.target.value}))}/>
+              </div>
+              <div>
+                <label style={{fontSize:8,color:'#334155',fontWeight:700,textTransform:'uppercase',marginBottom:4,display:'block'}}>Role</label>
+                <select value={n.role} onChange={e=>setN(p=>({...p,role:e.target.value}))} style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,color:'#e2e8f0',padding:'8px 10px',fontSize:11,width:'100%'}}>
+                  <option value="owner">Owner</option>
+                  <option value="importer">Importer</option>
+                  <option value="packer">Packer</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </div>
+              <div style={{display:'flex',alignItems:'flex-end'}}>
+                <button className="btn" style={{background:'#1d4ed8',color:'#fff',padding:'8px 12px',fontSize:11,fontWeight:700,width:'100%'}} onClick={()=>{if(n.name&&n.username&&n.password){setAccs(p=>[...p,{...n,id:Date.now()}]);setN({name:'',username:'',password:'',role:'packer'});}}}>+ Add Account</button>
+              </div>
             </div>
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:16}}>
-            <button className="btn" style={{background:'rgba(255,255,255,0.05)',color:'#475569',fontSize:12}} onClick={onClose}>Cancel</button>
-            <button className="btn" style={{background:'#1d4ed8',color:'#fff',fontSize:12}} onClick={()=>{onSave(accs);onClose();}}>Save Changes</button>
-          </div>
+        {/* Footer - Sticky Action Buttons */}
+        <div style={{padding:'14px 16px',borderTop:'1px solid rgba(255,255,255,0.06)',display:'flex',gap:10,justifyContent:'flex-end',backgroundColor:'rgba(6,12,24,0.5)',position:'sticky',bottom:0}}>
+          <button className="btn" style={{background:'rgba(255,255,255,0.05)',color:'#475569',fontSize:12,padding:'8px 16px'}} onClick={onClose}>Cancel</button>
+          <button className="btn" style={{background:'#1d4ed8',color:'#fff',fontSize:12,padding:'8px 16px'}} onClick={()=>{if(accs.some(a=>a.username&&a.password)){onSave(accs);onClose();}}}>✓ Save</button>
         </div>
       </div>
     </div>
