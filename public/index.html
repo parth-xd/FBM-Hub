@@ -2408,42 +2408,66 @@ function UserManageModal({accounts,onSave,onClose}) {
   const [n,setN]=useState({name:'',username:'',password:'',role:'packer'});
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box fadeIn" style={{border:'1px solid rgba(255,255,255,0.1)',maxWidth:600}} onClick={e=>e.stopPropagation()}>
-        <div style={{padding:'18px 22px',borderBottom:'1px solid rgba(255,255,255,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <div className="modal-box fadeIn" style={{border:'1px solid rgba(255,255,255,0.1)',maxWidth:600,maxHeight:'85vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+        <div style={{padding:'18px 22px',borderBottom:'1px solid rgba(255,255,255,0.06)',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,backgroundColor:'#0b1526',zIndex:10}}>
           <div style={{fontWeight:800,fontSize:14,color:'#f1f5f9'}}>👥 Team Accounts</div>
           <button onClick={onClose} style={{background:'rgba(255,255,255,0.06)',border:'none',color:'#475569',borderRadius:7,width:28,height:28,cursor:'pointer',fontSize:14}}>✕</button>
         </div>
-        <div style={{padding:22}}>
-          <table style={{width:'100%',fontSize:11,marginBottom:16}}>
-            <thead><tr style={{borderBottom:'1px solid rgba(255,255,255,0.06)'}}>
-              {['Name','Username','Password','Role',''].map(h=><th key={h} style={{padding:'5px 8px',textAlign:'left',color:'#334155',fontSize:9,textTransform:'uppercase',fontWeight:700,background:'transparent'}}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {accs.map((a,i)=>(
-                <tr key={a.id} style={{borderBottom:'1px solid rgba(255,255,255,0.03)'}}>
-                  {['name','username','password'].map(field=><td key={field} style={{padding:'5px 6px'}}><input className="input" style={{padding:'5px 8px',fontSize:11}} value={a[field]} onChange={e=>{const c=[...accs];c[i]={...c[i],[field]:e.target.value};setAccs(c);}}/></td>)}
-                  <td style={{padding:'5px 6px'}}>
-                    <select value={a.role} onChange={e=>{const c=[...accs];c[i]={...c[i],role:e.target.value};setAccs(c);}} style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,color:'#e2e8f0',padding:'5px 8px',fontSize:11}}>
-                      <option value="owner">Owner</option><option value="importer">Importer</option><option value="packer">Packer</option>
-                    </select>
-                  </td>
-                  <td style={{padding:'5px 6px'}}><button onClick={()=>setAccs(p=>p.filter((_,j)=>j!==i))} style={{background:'rgba(239,68,68,0.12)',border:'none',color:'#ef4444',borderRadius:5,padding:'4px 8px',cursor:'pointer',fontSize:10}}>✕</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{background:'rgba(255,255,255,0.02)',borderRadius:8,padding:14,marginBottom:14,display:'grid',gridTemplateColumns:'1fr 1fr 1fr auto auto',gap:7,alignItems:'center'}}>
-            <input className="input" style={{padding:'6px 10px',fontSize:11}} placeholder="Full Name" value={n.name} onChange={e=>setN(p=>({...p,name:e.target.value}))}/>
-            <input className="input" style={{padding:'6px 10px',fontSize:11}} placeholder="Username" value={n.username} onChange={e=>setN(p=>({...p,username:e.target.value}))}/>
-            <input className="input" style={{padding:'6px 10px',fontSize:11}} placeholder="Password" value={n.password} onChange={e=>setN(p=>({...p,password:e.target.value}))}/>
-            <select value={n.role} onChange={e=>setN(p=>({...p,role:e.target.value}))} style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,color:'#e2e8f0',padding:'6px 8px',fontSize:11}}>
-              <option value="owner">Owner</option><option value="importer">Importer</option><option value="packer">Packer</option>
-            </select>
-            <button className="btn" style={{background:'#1d4ed8',color:'#fff',padding:'6px 12px',fontSize:11}} onClick={()=>{if(n.username&&n.password){setAccs(p=>[...p,{...n,id:Date.now()}]);setN({name:'',username:'',password:'',role:'packer'});}}}>+</button>
+        <div style={{padding:'16px 20px'}}>
+          {/* Accounts List */}
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#334155',textTransform:'uppercase',marginBottom:10}}>Existing Accounts</div>
+            {accs.length===0?<div style={{color:'#1e3a5f',fontSize:12,padding:'12px'}}>No accounts yet</div>:(
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {accs.map((a,i)=>(
+                  <div key={a.id} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)',borderRadius:8,padding:'10px 12px',display:'flex',flexDirection:'column',gap:8}}>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                      <div>
+                        <label style={{fontSize:9,color:'#334155',fontWeight:700}}>Name</label>
+                        <input className="input" style={{padding:'6px 8px',fontSize:11,marginTop:4}} value={a.name} onChange={e=>{const c=[...accs];c[i]={...c[i],name:e.target.value};setAccs(c);}}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:9,color:'#334155',fontWeight:700}}>Role</label>
+                        <select value={a.role} onChange={e=>{const c=[...accs];c[i]={...c[i],role:e.target.value};setAccs(c);}} style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,color:'#e2e8f0',padding:'6px 8px',fontSize:11,width:'100%',marginTop:4}}>
+                          <option value="owner">Owner</option><option value="importer">Importer</option><option value="packer">Packer</option><option value="viewer">Viewer</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:8,alignItems:'flex-end'}}>
+                      <div>
+                        <label style={{fontSize:9,color:'#334155',fontWeight:700}}>Username</label>
+                        <input className="input" style={{padding:'6px 8px',fontSize:11,marginTop:4}} value={a.username} onChange={e=>{const c=[...accs];c[i]={...c[i],username:e.target.value};setAccs(c);}}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:9,color:'#334155',fontWeight:700}}>Password</label>
+                        <input className="input" style={{padding:'6px 8px',fontSize:11,marginTop:4}} value={a.password} onChange={e=>{const c=[...accs];c[i]={...c[i],password:e.target.value};setAccs(c);}}/>
+                      </div>
+                      <button onClick={()=>setAccs(p=>p.filter((_,j)=>j!==i))} style={{background:'rgba(239,68,68,0.12)',border:'none',color:'#ef4444',borderRadius:5,padding:'6px 10px',cursor:'pointer',fontSize:11,fontWeight:700,minWidth:40}}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+
+          {/* Add New Account */}
+          <div style={{background:'rgba(255,255,255,0.02)',borderRadius:8,padding:'14px',border:'1px solid rgba(255,255,255,0.05)'}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#334155',textTransform:'uppercase',marginBottom:10}}>Add New Account</div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              <input className="input" style={{padding:'8px 10px',fontSize:11}} placeholder="Full Name" value={n.name} onChange={e=>setN(p=>({...p,name:e.target.value}))}/>
+              <input className="input" style={{padding:'8px 10px',fontSize:11}} placeholder="Username" value={n.username} onChange={e=>setN(p=>({...p,username:e.target.value}))}/>
+              <input className="input" style={{padding:'8px 10px',fontSize:11}} placeholder="Password" value={n.password} onChange={e=>setN(p=>({...p,password:e.target.value}))}/>
+              <select value={n.role} onChange={e=>setN(p=>({...p,role:e.target.value}))} style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:6,color:'#e2e8f0',padding:'8px 10px',fontSize:11}}>
+                <option value="owner">Owner</option><option value="importer">Importer</option><option value="packer">Packer</option><option value="viewer">Viewer</option>
+              </select>
+              <button className="btn" style={{background:'#1d4ed8',color:'#fff',padding:'8px 12px',fontSize:12,width:'100%'}} onClick={()=>{if(n.username&&n.password){setAccs(p=>[...p,{...n,id:Date.now()}]);setN({name:'',username:'',password:'',role:'packer'});}}}>+ Add Account</button>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:16}}>
             <button className="btn" style={{background:'rgba(255,255,255,0.05)',color:'#475569',fontSize:12}} onClick={onClose}>Cancel</button>
-            <button className="btn" style={{background:'#1d4ed8',color:'#fff',fontSize:12}} onClick={()=>{onSave(accs);onClose();}}>Save</button>
+            <button className="btn" style={{background:'#1d4ed8',color:'#fff',fontSize:12}} onClick={()=>{onSave(accs);onClose();}}>Save Changes</button>
           </div>
         </div>
       </div>
