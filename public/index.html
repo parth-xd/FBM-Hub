@@ -159,6 +159,124 @@ tr.datarow:hover td{filter:brightness(1.12)}
   /* Pagination compact */
   div[role="pagination"] { gap: 4px; font-size: 10px; }
 }
+
+/* ═══ MOBILE MENU (Apple-style) ═══ */
+@keyframes slideInMenu { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+
+.mobile-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 150;
+}
+
+.mobile-menu-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+  animation: fadeInOverlay 0.3s ease;
+}
+
+.mobile-menu-panel {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: 85vw;
+  max-width: 320px;
+  background: linear-gradient(135deg, #0a1520 0%, #0f1d2f 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 160;
+  transform: translateX(-100%);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-y: auto;
+  padding-top: 70px;
+}
+
+.mobile-menu-panel.active {
+  transform: translateX(0);
+  animation: slideInMenu 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-menu-item {
+  display: block;
+  width: 100%;
+  padding: 16px 20px;
+  border: none;
+  background: none;
+  color: #cbd5e1;
+  text-align: left;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+  font-family: inherit;
+  letter-spacing: -0.02em;
+}
+
+.mobile-menu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f1f5f9;
+}
+
+.mobile-menu-item.active {
+  background: rgba(96, 165, 250, 0.1);
+  border-left-color: #60a5fa;
+  color: #60a5fa;
+}
+
+.mobile-menu-item:active {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(0.98);
+}
+
+.mobile-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 8px 0;
+}
+
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: #cbd5e1;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px 12px;
+  margin-right: 8px;
+  transition: all 0.2s ease;
+  z-index: 170;
+}
+
+.hamburger-btn:hover {
+  color: #f1f5f9;
+}
+
+.hamburger-btn:active {
+  transform: scale(0.95);
+}
+
+/* Hide nav tabs and show hamburger on mobile */
+@media (max-width: 768px) {
+  .hamburger-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .desktop-nav-tabs {
+    display: none;
+  }
+}
 </style>
 </head>
 <body>
@@ -2837,6 +2955,7 @@ function App() {
   const [syncError, setSyncError] = React.useState(null);
   const [screen, setScreen] = React.useState(currentUser ? 'dashboard' : 'login');
   const [activeTab, setActiveTab] = React.useState('operations');
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [showUsers, setShowUsers] = React.useState(false);
   const [lastSync, setLastSync] = React.useState(null);
   
@@ -2906,6 +3025,36 @@ function App() {
     
     return () => clearInterval(interval);
   }, [sheetConnected]);
+
+  // Mobile menu - lock scroll & handle resize/escape
+  React.useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    const handleResize = () => {
+      if (window.innerWidth > 768 && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', handleResize);
+      document.body.style.overflow = 'auto';
+    };
+  }, [mobileMenuOpen]);
 
   // Create Multi PO
   const createMultiPO = React.useCallback((multiPO) => {
@@ -3167,6 +3316,11 @@ function App() {
       {/* Top bar */}
       <div style={{borderBottom:'1px solid rgba(255,255,255,0.06)',background:'rgba(6,12,24,0.95)',backdropFilter:'blur(10px)',position:'sticky',top:0,zIndex:200}}>
         <div style={{display:'flex',alignItems:'center',padding:'0 16px',gap:12,height:58}}>
+          {/* Hamburger Menu Button */}
+          <button className="hamburger-btn" onClick={()=>setMobileMenuOpen(!mobileMenuOpen)} title={mobileMenuOpen?'Close menu':'Open menu'}>
+            {mobileMenuOpen?'✕':'☰'}
+          </button>
+
           {/* Logo */}
           <div style={{display:'flex',alignItems:'center',gap:9,marginRight:8}}>
             <div style={{width:34,height:34,background:'linear-gradient(135deg,#1d4ed8,#0ea5e9)',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:17}}>📦</div>
@@ -3176,8 +3330,8 @@ function App() {
             </div>
           </div>
 
-          {/* Nav tabs */}
-          <div style={{display:'flex',height:'100%',marginLeft:8}}>
+          {/* Nav tabs - Desktop only */}
+          <div style={{display:'flex',height:'100%',marginLeft:8}} className="desktop-nav-tabs">
             {TABS.map(t=><button key={t.k} className={`nav-tab ${activeTab===t.k?'active':''}`} onClick={()=>setActiveTab(t.k)}>{t.l}</button>)}
           </div>
 
@@ -3200,6 +3354,25 @@ function App() {
           {ri.canManage&&<button className="btn" style={{background:'rgba(255,255,255,0.04)',color:'#334155',padding:'5px 10px',fontSize:11}} onClick={()=>setShowUsers(true)}>👥</button>}
           <button className="btn" style={{background:'rgba(255,255,255,0.04)',color:'#ef4444',padding:'5px 10px',fontSize:11}} onClick={handleLogout} title="Sign out">🚪 Sign Out</button>
         </div>
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      <div className={`mobile-menu-overlay ${mobileMenuOpen?'active':''}`} onClick={()=>setMobileMenuOpen(false)}/>
+
+      {/* Mobile Menu Panel */}
+      <div className={`mobile-menu-panel ${mobileMenuOpen?'active':''}`}>
+        {TABS.map(t=>(
+          <button 
+            key={t.k} 
+            className={`mobile-menu-item ${activeTab===t.k?'active':''}`}
+            onClick={()=>{setActiveTab(t.k); setMobileMenuOpen(false);}}
+          >
+            {t.l}
+          </button>
+        ))}
+        <div className="mobile-menu-divider"/>
+        {ri.canManage&&<button className="mobile-menu-item" onClick={()=>{setShowUsers(true); setMobileMenuOpen(false);}}>👥 Manage Users</button>}
+        <button className="mobile-menu-item" style={{color:'#ef4444'}} onClick={()=>{handleLogout(); setMobileMenuOpen(false);}}>🚪 Sign Out</button>
       </div>
 
       {/* Main content */}
