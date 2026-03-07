@@ -2713,10 +2713,13 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
       case 'poId': return <span style={{fontFamily:'IBM Plex Mono',color:'#60a5fa',fontSize:10}}>{order.poId||'—'}</span>;
       case 'sQty': return <span style={{fontFamily:'IBM Plex Mono',color:'#475569',fontSize:11,textAlign:'center',display:'block'}}>{order.sQty??'—'}</span>;
       case 'bQty': return <span style={{fontFamily:'IBM Plex Mono',color:'#475569',fontSize:11,textAlign:'center',display:'block'}}>{order.bQty??'—'}</span>;
-      case 'weight': return <input type="number" step="0.01" min="0" value={order.weight??''} onClick={e=>e.stopPropagation()}
-        onChange={e=>{e.stopPropagation();const v=e.target.value===''?null:Number(e.target.value);updateOrder(order.id,{weight:v});syncCell(order.sheetRow,COL.weight,v===null?'':v);}}
-        style={{width:55,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:5,color:order.weight!=null?'#60a5fa':'#475569',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}}
-        placeholder="kg"/>;
+      case 'weight': return <div style={{display:'flex',flexDirection:'column',gap:1,alignItems:'center'}}>
+        <input type="number" step="0.01" min="0" value={order.weight??''} onClick={e=>e.stopPropagation()}
+          onChange={e=>{e.stopPropagation();const v=e.target.value===''?null:Number(e.target.value);updateOrder(order.id,{weight:v});syncCell(order.sheetRow,COL.weight,v===null?'':v);}}
+          style={{width:55,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:5,color:order.weight!=null?'#60a5fa':'#475569',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}}
+          placeholder="kg"/>
+        {order.suggestedWeight!=null&&<div style={{fontSize:7,color:'#475569',whiteSpace:'nowrap'}} title="Suggested weight from sheet">~{Number(order.suggestedWeight).toFixed(2)}kg</div>}
+      </div>;
       case 'buyExcVAT': return <span style={{fontFamily:'IBM Plex Mono',color:'#fbbf24',fontWeight:700,fontSize:11}}>{order.totalBuyPriceExcVAT!=null?`£${Number(order.totalBuyPriceExcVAT).toFixed(2)}`:'—'}</span>;
       case 'hts': return <span style={{fontFamily:'IBM Plex Mono',color:'#a78bfa',fontSize:9}}>{order.htsCode||'—'}</span>;
       case 'profit': return <span style={{fontFamily:'IBM Plex Mono',fontSize:11,color:order.expectedProfit!=null?(Number(order.expectedProfit)>=0?'#22c55e':'#ef4444'):'#1e3a5f'}}>{order.expectedProfit!=null?`$${Number(order.expectedProfit).toFixed(2)}`:'—'}</span>;
@@ -3148,6 +3151,16 @@ function App() {
   const [showUsers, setShowUsers] = React.useState(false);
   const [lastSync, setLastSync] = React.useState(null);
   
+  // Accounts state for Manage Users
+  const [accounts, setAccounts] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem('fbm_accounts');
+      return saved ? JSON.parse(saved) : DEFAULT_ACCOUNTS;
+    } catch {
+      return DEFAULT_ACCOUNTS;
+    }
+  });
+  
   // Check if sheet connection is valid (cached for 24 hours)
   const [sheetConnected, setSheetConnected] = React.useState(() => {
     const connTime = parseInt(localStorage.getItem('sheetConnectionTime') || '0');
@@ -3392,6 +3405,7 @@ function App() {
           totalBuyPriceExcVAT: parseNum(r[20]),
           shippingCostGBP: parseNum(r[22]),
           expectedProfit: parseNum(r[23]),
+          suggestedWeight: parseNum(r[24]),
           weight: parseNum(r[24]),
           labelPrinted: r[31] === 'TRUE' || r[31] === true,
           status: r[31] === 'TRUE' ? 'packed' : 'pending',
@@ -3443,13 +3457,88 @@ function App() {
     loadOrders();
   },[sheetConnected]);
 
-  // Real-time polling: refresh orders every 3 seconds for instant sync across users
+  // Smart polling: refresh from sheet every 15s without overwriting in-progress local edits
+  const pollingRef = React.useRef(false);
   React.useEffect(()=>{
     if(!sheetConnected || !currentUser) return;
     
-    const pollInterval = setInterval(() => {
-      loadOrders().catch(e => console.error('Polling error:', e));
-    }, 3000); // Poll every 3 seconds
+    const pollInterval = setInterval(async () => {
+      if(pollingRef.current) return; // Skip if a poll is already running
+      pollingRef.current = true;
+      try {
+        const base = window.API_BASE || '';
+        const res = await fetch(`${base}/api/read?spreadsheetId=${encodeURIComponent(window.SHEET_ID)}&range=Main%20STB%20Expenses!A3:AN`);
+        if(!res.ok) { pollingRef.current = false; return; }
+        const data = await res.json();
+        const rows = data.values || [];
+        if(rows.length === 0) { pollingRef.current = false; return; }
+        
+        const parseNum = (val) => {
+          if (!val) return null;
+          const str = String(val);
+          const cleaned = str.replace(/[£€$]/g, '').replace(/~~[^~]*~~/g, '').trim();
+          const matches = cleaned.match(/[\d.]+/g);
+          if (matches && matches.length > 0) {
+            const nums = matches.map(Number).filter(n => !isNaN(n));
+            return nums.length > 0 ? Math.max(...nums) : null;
+          }
+          return null;
+        };
+        
+        // Build fresh data from sheet, but preserve local-only fields
+        setOrders(prev => {
+          const prevMap = new Map(prev.map(o => [o.sheetRow, o]));
+          const fresh = rows.map((r, i) => {
+            const sheetRow = i + 3;
+            const orderId = r[2] || null;
+            const existing = prevMap.get(sheetRow);
+            return {
+              id: i + 1,
+              sheetRow,
+              orderId,
+              orderDate: r[1] || null,
+              productName: r[7] || null,
+              totalSellPrice: parseNum(r[9]),
+              totalBuyPriceIncVAT: parseNum(r[18]),
+              totalBuyPriceExcVAT: parseNum(r[20]),
+              shippingCostGBP: parseNum(r[22]),
+              expectedProfit: parseNum(r[23]),
+              suggestedWeight: parseNum(r[24]),
+              weight: existing?.weight ?? parseNum(r[24]),
+              labelPrinted: r[31] === 'TRUE' || r[31] === true,
+              status: r[31] === 'TRUE' ? 'packed' : 'pending',
+              isDHL: String(r[30] || '').toUpperCase() === 'DHL',
+              poId: r[14] || null,
+              sQty: parseNum(r[6]),
+              bQty: parseNum(r[15]),
+              qtyReceived: parseNum(r[28]),
+              discrepancy: parseNum(r[29]),
+              exceptionReason: r[32] || null,
+              exceptionStockSolution: r[33] || null,
+              exceptionPOCreated: r[34] === 'TRUE' || r[34] === true,
+              goodsNotAvailable: r[35] === 'TRUE' || r[35] === true,
+              shipByDate: r[9] || null,
+              expectedDeliveryDate: r[26] || null,
+              purchasedBy: r[10] || null,
+              checkedBy: r[11] || null,
+              buyLink: r[13] || null,
+              asin: r[4] || null,
+              sku: r[5] || null,
+              amazonLink: orderId ? `https://sellercentral.amazon.com/orders-v3/order/${orderId}` : null,
+              shipStationLink: r[33] || null,
+              beingEdited: existing?.beingEdited || false
+            };
+          }).filter(o => o.productName || o.orderId);
+          return fresh;
+        });
+        setSyncStatus('synced');
+        setLastSync(new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}));
+      } catch(e) {
+        console.error('Polling error:', e);
+      } finally {
+        pollingRef.current = false;
+      }
+    }, 15000); // Poll every 15 seconds — fast enough for collaboration, gentle on API
     
     return () => clearInterval(pollInterval);
   },[sheetConnected, currentUser]);
