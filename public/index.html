@@ -3463,7 +3463,7 @@ function App() {
     }
 
     // Determine WebSocket URL
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     let wsUrl;
     
     if (window.API_BASE) {
