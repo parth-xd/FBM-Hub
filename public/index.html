@@ -3385,7 +3385,7 @@ function App() {
     try {
       const base = window.API_BASE || '';
       const offset = 0;
-      const limit = 100; // Load first 100, more on scroll
+      const limit = 10000; // Load up to 10,000 orders
 
       const res = await fetch(`${base}/api/orders?offset=${offset}&limit=${limit}`);
       if (!res.ok) {
@@ -3395,7 +3395,7 @@ function App() {
       const data = await res.json();
       const orders = data.orders || [];
       
-      console.log(`✓ Loaded ${orders.length} orders from SQL database`);
+      console.log(`✓ Loaded ${orders.length} orders from SQL database (total: ${data.total})`);
       
       // Convert snake_case from SQL to camelCase for frontend
       const parsed = orders.map(order => ({
