@@ -73,8 +73,22 @@ tr.datarow:hover td{filter:brightness(1.12)}
   .kv { padding: 8px 10px; }
   .kv .kval { font-size: 13px; }
   
-  /* App-like mobile layout */
-  #root > div > div:nth-child(1) { height: 50px; padding: 0 10px !important; }
+  /* Optimized header on tablet */
+  div[role="filters"] {
+    gap: 6px;
+    padding: 8px 12px !important;
+  }
+  
+  div[role="filters"] > input:first-child {
+    flex: 0 1 150px;
+    max-width: 40vw;
+  }
+  
+  div[role="pagination"] {
+    gap: 6px;
+    padding: 8px 12px !important;
+    font-size: 10px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -145,43 +159,45 @@ tr.datarow:hover td{filter:brightness(1.12)}
 }
 
 @media (max-width: 480px) {
-  /* Hide more columns on phones */
-  th[data-col="hts"], td[data-col="hts"],
-  th[data-col="links"], td[data-col="links"],
-  th[data-col="profit"], td[data-col="profit"],
-  th[data-col="disc"], td[data-col="disc"],
-  th[data-col="weight"], td[data-col="weight"],
-  th[data-col="poId"], td[data-col="poId"] {
-    display: none;
-  }
+  body { font-size: 13px; }
+  .btn { padding: 10px 12px; font-size: 12px; }
+  .input { padding: 10px 10px; font-size: 12px; }
+  .modal-box { width: 100%; margin-bottom: 20px; }
+  .nav-tab { padding: 10px 8px; font-size: 10px; }
+  .nav-tab.active::after { left: 8px; right: 8px; }
+  .stat-value { font-size: 20px; }
+  .stat-card { padding: 12px 14px; }
+  table { font-size: 11px; }
+  th, td { padding: 6px 4px; }
+  .kv { padding: 8px 10px; }
+  .kv .kval { font-size: 12px; }
+  .tag { padding: 1px 6px; font-size: 9px; }
+  textarea { min-height: 100px; }
+  .section-title { font-size: 9px; }
   
-  /* Hide stats bar completely on phones */
-  div[role="stats-bar"] {
-    display: none !important;
-  }
-  
-  /* Minimal table sizing */
-  table { font-size: 9px; }
-  th { padding: 5px 6px !important; font-size: 7px; }
-  td { padding: 4px 6px !important; }
-  
-  /* Input fields smaller */
-  td input { font-size: 9px; padding: 3px !important; }
-  
-  /* Filters stack better on small phones */
+  /* Ultra-compact header on phones */
   div[role="filters"] {
     gap: 4px;
-    padding: 6px 12px !important;
+    padding: 6px 10px !important;
     flex-direction: column;
     align-items: stretch;
   }
   
-  div[role="filters"] > input {
-    width: 100% !important;
+  div[role="filters"] > input:first-child {
+    width: 100%;
+    max-width: 100%;
+    flex: 1;
+    order: -1;
   }
   
   div[role="filters"] > select {
-    width: 100% !important;
+    width: 100%;
+    flex: 1;
+  }
+  
+  div[role="filters"] > input[type="date"] {
+    width: 100%;
+    flex: 1;
   }
   
   div[role="filters"] > div {
@@ -191,17 +207,17 @@ tr.datarow:hover td{filter:brightness(1.12)}
   }
   
   div[role="filters"] > div > button {
-    padding: 6px 8px;
-    font-size: 10px;
+    padding: 5px 7px;
+    font-size: 9px;
     min-width: fit-content;
     flex: 0 1 auto;
   }
   
-  /* Pagination compact */
+  /* Compact pagination on phones */
   div[role="pagination"] { 
     gap: 4px;
-    font-size: 10px;
-    padding: 8px 12px !important;
+    font-size: 9px;
+    padding: 6px 10px !important;
     flex-direction: column;
     align-items: flex-start;
   }
@@ -214,6 +230,12 @@ tr.datarow:hover td{filter:brightness(1.12)}
   div[role="pagination"] > div:last-child {
     width: 100%;
     flex-wrap: wrap;
+    gap: 3px;
+  }
+  
+  div[role="pagination"] button {
+    padding: 4px 5px;
+    font-size: 9px;
   }
 }
 
@@ -2661,17 +2683,17 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
       </div>
 
       {/* Filters + Search - Main mobile interface */}
-      <div role="filters" style={{display:'flex',gap:8,padding:'10px 16px',borderBottom:'1px solid rgba(255,255,255,0.04)',flexWrap:'wrap',alignItems:'center',backgroundColor:'rgba(6,12,24,0.5)'}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search order, ASIN, SKU, product, PO…" className="input" style={{flex:'1 1 200px',minWidth:140,padding:'8px 12px',fontSize:12}}/>
+      <div role="filters" style={{display:'flex',gap:6,padding:'8px 12px',borderBottom:'1px solid rgba(255,255,255,0.04)',flexWrap:'wrap',alignItems:'center',backgroundColor:'rgba(6,12,24,0.5)'}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search order, ASIN, SKU…" className="input" style={{flex:'0 1 180px',minWidth:120,maxWidth:'35vw',padding:'7px 10px',fontSize:11}}/>
         
-        <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 1 auto',minWidth:120,padding:'8px 10px',fontSize:11}}>
+        <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 1 auto',minWidth:100,maxWidth:'25vw',padding:'7px 8px',fontSize:10}}>
           <option value="">All Suppliers</option>
           {[...new Set(orders.filter(o=>o.buyLink).map(o=>getSupplier(o.buyLink).name))].sort().map(s=>(
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
         
-        <input type="date" value={deliveryDateFilter} onChange={e=>setDeliveryDateFilter(e.target.value)} className="input" style={{flex:'0 1 auto',minWidth:120,padding:'8px 10px',fontSize:11}} title="Filter by expected delivery date"/>
+        <input type="date" value={deliveryDateFilter} onChange={e=>setDeliveryDateFilter(e.target.value)} className="input" style={{flex:'0 1 auto',minWidth:100,maxWidth:'25vw',padding:'7px 8px',fontSize:10}} title="Filter by expected delivery date"/>
         
         <div style={{display:'flex',gap:2,background:'rgba(255,255,255,0.02)',borderRadius:7,padding:3,flexWrap:'wrap'}}>
           {FILTERS.map(f=>(
@@ -2685,10 +2707,10 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
       </div>
 
       {/* Table - Pagination */}
-      <div role="pagination" style={{padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,borderBottom:'1px solid rgba(255,255,255,0.04)',backgroundColor:'rgba(6,12,24,0.3)'}}>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <div style={{fontSize:11,color:'#334155',marginRight:6}}>Rows:</div>
-          <select value={pageSize} onChange={e=>{const v= e.target.value==='all'?filtered.length: Number(e.target.value); setPageSize(v);}} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)',color:'#e2e8f0',padding:'6px 8px',borderRadius:6}}>
+      <div role="pagination" style={{padding:'8px 12px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,borderBottom:'1px solid rgba(255,255,255,0.04)',backgroundColor:'rgba(6,12,24,0.3)',flexWrap:'wrap',minHeight:44}}>
+        <div style={{display:'flex',gap:6,alignItems:'center',fontSize:10}}>
+          <div style={{fontSize:9,color:'#334155',marginRight:3,textTransform:'uppercase',fontWeight:700}}>Rows:</div>
+          <select value={pageSize} onChange={e=>{const v= e.target.value==='all'?filtered.length: Number(e.target.value); setPageSize(v);}} style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)',color:'#e2e8f0',padding:'5px 6px',borderRadius:5,fontSize:10}}>
             <option value={25}>25</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
@@ -2696,12 +2718,12 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
             <option value={500}>500</option>
             <option value="all">All</option>
           </select>
-          <div style={{fontSize:12,color:'#94a3b8',marginLeft:8}}>{filtered.length?`${startIndex+1}-${endIndex} of ${filtered.length}`:'0 rows'}</div>
+          <div style={{fontSize:10,color:'#94a3b8'}}>{filtered.length?`${startIndex+1}-${endIndex}/${filtered.length}`:'0'}</div>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <button className="btn" style={{padding:'6px 8px'}} onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page<=0}>Prev</button>
-          <div style={{fontFamily:'IBM Plex Mono',color:'#aab6c9'}}>{page+1}/{totalPages}</div>
-          <button className="btn" style={{padding:'6px 8px'}} onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page+1>=totalPages}>Next</button>
+        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          <button className="btn" style={{padding:'5px 6px',fontSize:10}} onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page<=0}>Prev</button>
+          <div style={{fontFamily:'IBM Plex Mono',color:'#aab6c9',fontSize:10}}>{page+1}/{totalPages}</div>
+          <button className="btn" style={{padding:'5px 6px',fontSize:10}} onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page+1>=totalPages}>Next</button>
         </div>
       </div>
 
@@ -3412,7 +3434,7 @@ function App() {
       </div>}
       {/* Top bar */}
       <div style={{borderBottom:'1px solid rgba(255,255,255,0.06)',background:'rgba(6,12,24,0.95)',backdropFilter:'blur(10px)',position:'sticky',top:0,zIndex:200}}>
-        <div style={{display:'flex',alignItems:'center',padding:'0 16px',gap:12,height:58}}>
+        <div style={{display:'flex',alignItems:'center',padding:'0 12px',gap:10,height:54,minHeight:54}}>
           {/* Hamburger Menu Button */}
           <button className="hamburger-btn" onClick={()=>setMobileMenuOpen(!mobileMenuOpen)} title={mobileMenuOpen?'Close menu':'Open menu'}>
             {mobileMenuOpen?'✕':'☰'}
