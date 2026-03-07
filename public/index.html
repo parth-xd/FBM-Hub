@@ -3457,13 +3457,24 @@ function App() {
 
   // WebSocket real-time sync (replaces polling)
   React.useEffect(()=>{
-    if(!currentUser) return;
+    if(!currentUser) {
+      console.log('⏳ Waiting for user login before connecting WebSocket...');
+      return;
+    }
 
     // Determine WebSocket URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = window.API_BASE 
-      ? `${window.API_BASE.replace(/^https?/, protocol).replace(/\/$/, '')}`
-      : `${protocol}//${window.location.host}`;
+    let wsUrl;
+    
+    if (window.API_BASE) {
+      // If API_BASE is set, use it but convert to WebSocket protocol
+      wsUrl = window.API_BASE
+        .replace(/^https?:\/\//, `${protocol}://`)
+        .replace(/\/$/, '');
+    } else {
+      // Default: use current host with WebSocket protocol
+      wsUrl = `${protocol}://${window.location.host}`;
+    }
 
     console.log('🔌 Connecting to WebSocket:', wsUrl);
     const ws = new WebSocket(wsUrl);
@@ -3476,6 +3487,7 @@ function App() {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        console.log('📨 WebSocket message:', message.type);
         
         if (message.type === 'order-updated') {
           // Real-time update from another user
