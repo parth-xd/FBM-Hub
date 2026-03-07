@@ -426,10 +426,23 @@ app.post('/api/shipstation/fulfill-order', async (req, res) => {
       })
     });
     
-    const data = await response.json();
+    // Parse response - check content-type to avoid JSON parsing errors
+    let data;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        console.error('JSON parse error:', jsonErr);
+        return res.status(500).json({error: 'ShipStation returned invalid JSON'});
+      }
+    } else {
+      const text = await response.text();
+      return res.status(response.status || 500).json({error: `ShipStation error (${response.status}): ${text.substring(0, 200)}`});
+    }
     
     if (!response.ok) {
-      return res.status(response.status).json({error: data.message || 'ShipStation error'});
+      return res.status(response.status).json({error: data.message || data.error || 'ShipStation error'});
     }
     
     res.json({ok: true, label: data});

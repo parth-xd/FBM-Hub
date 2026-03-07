@@ -3435,6 +3435,17 @@ function App() {
     loadOrders();
   },[sheetConnected]);
 
+  // Real-time polling: refresh orders every 3 seconds for instant sync across users
+  React.useEffect(()=>{
+    if(!sheetConnected || !currentUser) return;
+    
+    const pollInterval = setInterval(() => {
+      loadOrders().catch(e => console.error('Polling error:', e));
+    }, 3000); // Poll every 3 seconds
+    
+    return () => clearInterval(pollInterval);
+  },[sheetConnected, currentUser]);
+
   function handleLogin(user) {
     console.log('👤 User logged in:', user.email);
     window.CURRENT_USER = user;
