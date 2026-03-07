@@ -2754,26 +2754,26 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         {stats.editing>0&&<div style={{background:'rgba(16,185,129,0.08)',border:'1px solid rgba(16,185,129,0.25)',borderRadius:8,padding:'7px 12px',color:'#10b981',fontSize:11,fontWeight:700}}>🔒 {stats.editing} being imported</div>}
       </div>
 
-      {/* Filters + Search - Apple-style minimal design */}
-      <div role="filters" style={{display:'flex',gap:10,padding:'12px 16px',borderBottom:'1px solid rgba(255,255,255,0.05)',flexWrap:'nowrap',alignItems:'center',backgroundColor:'#0a0f1a',overflowX:'auto'}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" className="input" style={{flex:'1 1 auto',minWidth:150,padding:'8px 12px',fontSize:'15px',height:36,borderRadius:10,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)'}} />
+      {/* Filters + Search - Apple-style compact */}
+      <div role="filters" style={{display:'flex',gap:6,padding:'8px 14px',borderBottom:'1px solid rgba(255,255,255,0.05)',flexWrap:'nowrap',alignItems:'center',backgroundColor:'#0a0f1a',width:'100%',boxSizing:'border-box',overflow:'hidden'}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search…" className="input" style={{flex:'1 1 80px',minWidth:80,padding:'5px 10px',fontSize:'16px',height:32,borderRadius:8,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)'}} />
         
-        <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 0 130px',padding:'8px 12px',fontSize:'15px',height:36,borderRadius:10,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)'}}>
+        <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 0 100px',padding:'5px 8px',fontSize:'16px',height:32,borderRadius:8,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)'}}>
           <option value="">Suppliers</option>
           {[...new Set(orders.filter(o=>o.buyLink).map(o=>getSupplier(o.buyLink).name))].sort().map(s=>(
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
         
-        <input type="date" value={deliveryDateFilter} onChange={e=>setDeliveryDateFilter(e.target.value)} className="input" style={{flex:'0 0 140px',padding:'8px 12px',fontSize:'15px',height:36,borderRadius:10,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)'}} title="Delivery date"/>
+        <input type="date" value={deliveryDateFilter} onChange={e=>setDeliveryDateFilter(e.target.value)} className="input" style={{flex:'0 0 100px',padding:'5px 8px',fontSize:'16px',height:32,borderRadius:8,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)'}} title="Delivery date"/>
         
-        {(supplierFilter||deliveryDateFilter)&&<button onClick={()=>{setSupplierFilter('');setDeliveryDateFilter('');}} style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',borderRadius:8,padding:'6px 12px',fontSize:13,cursor:'pointer',fontWeight:600,flex:'0 0 auto'}}>Reset</button>}
+        {(supplierFilter||deliveryDateFilter)&&<button onClick={()=>{setSupplierFilter('');setDeliveryDateFilter('');}} style={{background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',borderRadius:6,padding:'4px 8px',fontSize:11,cursor:'pointer',fontWeight:600,flex:'0 0 auto',height:32,display:'flex',alignItems:'center'}}>✕</button>}
       </div>
       
       {/* Filter buttons - Status bar */}
-      <div style={{display:'flex',gap:8,padding:'8px 16px',borderBottom:'1px solid rgba(255,255,255,0.04)',flexWrap:'wrap',alignItems:'center',backgroundColor:'rgba(6,12,24,0.3)',overflowX:'auto'}}>
+      <div style={{display:'flex',gap:6,padding:'6px 14px',borderBottom:'1px solid rgba(255,255,255,0.04)',flexWrap:'wrap',alignItems:'center',backgroundColor:'rgba(6,12,24,0.3)',width:'100%',boxSizing:'border-box'}}>
         {FILTERS.map(f=>(
-          <button key={f.k} onClick={()=>setFilter(f.k)} style={{background:filter===f.k?'rgba(29,78,216,0.4)':'transparent',border:`1px solid ${filter===f.k?'rgba(96,165,250,0.5)':'rgba(255,255,255,0.1)'}`,color:filter===f.k?'#60a5fa':f.c||'#94a3b8',borderRadius:8,padding:'6px 12px',fontSize:12,cursor:'pointer',fontWeight:500,transition:'all .2s',whiteSpace:'nowrap',display:'flex',alignItems:'center',minHeight:32}}>
+          <button key={f.k} onClick={()=>setFilter(f.k)} style={{background:filter===f.k?'rgba(29,78,216,0.4)':'transparent',border:`1px solid ${filter===f.k?'rgba(96,165,250,0.5)':'rgba(255,255,255,0.08)'}`,color:filter===f.k?'#60a5fa':f.c||'#94a3b8',borderRadius:6,padding:'4px 8px',fontSize:11,cursor:'pointer',fontWeight:500,transition:'all .2s',whiteSpace:'nowrap',height:26}}>
             {f.l}
           </button>
         ))}
