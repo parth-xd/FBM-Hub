@@ -53,6 +53,14 @@ app.use(security.uploadLimiter);
 app.use(express.static('public'));
 
 // ═══ POSTGRESQL DATABASE ═══
+// Validate DATABASE_URL exists before creating pool
+if (!process.env.DATABASE_URL && process.env.NODE_ENV === 'production') {
+  console.error('❌ ERROR: DATABASE_URL environment variable is not set!');
+  console.error('   On Render: Dashboard → Web Service → Environment → Add DATABASE_URL');
+  console.error('   Get the value from: Dashboard → PostgreSQL instance → Connections');
+  process.exit(1);
+}
+
 const pool = new Pool({
   // Use connection string from environment; never hardcode credentials
   connectionString: process.env.DATABASE_URL,
@@ -62,12 +70,22 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
-pool.on('error', (err) => console.error('❌ Unexpected error on idle client', err));
+pool.on('error', (err) => {
+  console.error('❌ Unexpected error on idle client', err.message);
+  if (err.code === 'ECONNREFUSED') {
+    console.error('   → Database is unreachable. Check DATABASE_URL and network connectivity.');
+  }
+});
 
 // Test connection
 pool.query('SELECT NOW()', (err, res) => {
   if (err) {
     console.error('❌ Database connection failed:', err.message);
+    if (!process.env.DATABASE_URL) {
+      console.error('   → DATABASE_URL is not set. Add it to environment variables.');
+    } else {
+      console.error('   → Check: region match, credentials, and firewall rules.');
+    }
   } else {
     console.log('✅ PostgreSQL Database connected:', res.rows[0].now);
   }
