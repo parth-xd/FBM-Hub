@@ -10,20 +10,52 @@ const WebSocket = require('ws');
 const http = require('http');
 const crypto = require('crypto');
 
+// ═══ SECURITY MODULES ═══
+const security = require('./security');
+
 // ═══ INITIALIZE EXPRESS + HTTP SERVER + WEBSOCKET ═══
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 3000;
 
-// Security middleware
-app.use(cors());
-app.use(express.json({limit: '50mb'}));
+// Generate request ID for tracking
+app.use((req, res, next) => {
+  req.id = crypto.randomBytes(8).toString('hex');
+  next();
+});
+
+// ═══ SECURITY HEADERS & PROTECTION ═══
+app.use(security.helmetConfig);
+app.use(security.customSecurityHeaders);
+
+// ═══ CORS CONFIGURATION ═══
+app.use(cors({
+  origin: process.env.PUBLIC_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-email', 'x-user-role'],
+}));
+
+// ═══ REQUEST SIZE & PARSING ═══
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// ═══ SANITIZATION ═══
+app.use(security.sanitizationMiddleware);
+
+// ═══ RATE LIMITING ═══
+app.use(security.apiLimiter);
+app.use(security.authLimiter);
+app.use(security.uploadLimiter);
+
+// ═══ STATIC FILES ═══
 app.use(express.static('public'));
 
 // ═══ POSTGRESQL DATABASE ═══
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/fbm_hub_dev',
+  // Use connection string from environment; never hardcode credentials
+  connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: 20,
   idleTimeoutMillis: 30000,
@@ -99,11 +131,17 @@ wss.on('connection', (ws) => {
 
 // ═══ AUTHENTICATION ENDPOINTS ═══
 
-app.post('/api/auth/request-login', async (req, res) => {
+// Validate and sanitize email input
+app.post('/api/auth/request-login', security.validateRequest(security.schemas.emailSchema), async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email || !email.includes('@')) {
-      return res.status(400).json({ error: 'Valid email required' });
+
+    // Rate limit per email
+    const recentAttempts = Array.from(loginTokens.values()).filter(
+      t => t.email === email && Date.now() - t.createdAt < 60000
+    );
+    if (recentAttempts.length > 3) {
+      return res.status(429).json({ error: 'Too many login attempts. Try again in 1 minute.' });
     }
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -119,16 +157,29 @@ app.post('/api/auth/request-login', async (req, res) => {
   }
 });
 
+// Validate token format
 app.get('/api/auth/verify', async (req, res) => {
   try {
     const { token } = req.query;
+
+    // Validate token format (should be 64 hex chars)
+    if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+      return res.status(400).json({ error: 'Invalid token format' });
+    }
+
     const loginData = loginTokens.get(token);
 
+    // Check token validity
     if (!loginData || loginData.used || Date.now() - loginData.createdAt > 3600000) {
       return res.status(400).json({ error: 'Invalid or expired token' });
     }
 
     const email = loginData.email;
+    // Validate email format before DB query
+    if (!email || !email.includes('@') || email.length > 254) {
+      return res.status(400).json({ error: 'Invalid email' });
+    }
+
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     const user = result.rows[0];
 
@@ -149,13 +200,25 @@ app.get('/api/auth/verify', async (req, res) => {
       }
     }
 
-    const sessionToken = jwt.sign({ email, role: user?.role || 'viewer' }, process.env.JWT_SECRET || 'dev-secret', { expiresIn: '30d' });
+    // Use JWT_SECRET from environment, require it in production
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret && process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET not configured');
+    }
+
+    const sessionToken = jwt.sign(
+      { email, role: user?.role || 'viewer' },
+      jwtSecret || 'dev-secret',
+      { expiresIn: '30d', issuer: 'fbm-hub', audience: 'fbm-hub-client' }
+    );
+
     loginTokens.set(token, { ...loginData, used: true });
 
     res.json({ ok: true, sessionToken });
   } catch (error) {
     console.error('Verification error:', error);
-    res.status(500).json({ error: error.message });
+    // Don't expose error details
+    res.status(500).json({ error: 'Authentication failed' });
   }
 });
 
@@ -167,7 +230,20 @@ app.post('/api/auth/me', async (req, res) => {
     }
 
     const token = authHeader.slice(7);
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+    const jwtSecret = process.env.JWT_SECRET || 'dev-secret';
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, jwtSecret, { issuer: 'fbm-hub', audience: 'fbm-hub-client' });
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    // Validate email before query
+    if (!decoded.email || !decoded.email.includes('@')) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
     const result = await pool.query('SELECT email, role, approved FROM users WHERE email = $1', [decoded.email]);
     const user = result.rows[0];
 
@@ -1125,12 +1201,52 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// ═══ GLOBAL ERROR HANDLER ═══
+// Must be registered after all other middleware and routes
+app.use(security.errorHandler);
+
+// ═══ STARTUP VALIDATION ═══
+const validateStartup = () => {
+  const errors = [];
+
+  // Check critical environment variables
+  if (!process.env.DATABASE_URL) {
+    errors.push('❌ DATABASE_URL not set');
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.JWT_SECRET) {
+      errors.push('❌ JWT_SECRET not set (required for production)');
+    }
+    if (!process.env.PUBLIC_URL) {
+      errors.push('❌ PUBLIC_URL not set (required for production)');
+    }
+    if (!process.env.RESEND_API_KEY) {
+      errors.push('⚠️  RESEND_API_KEY not set (emails will fail)');
+    }
+  }
+
+  if (errors.length > 0) {
+    console.error('🚨 STARTUP ERRORS:');
+    errors.forEach(e => console.error(e));
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  }
+
+  console.log('✅ Environment validation passed');
+};
+
 // ═══ START SERVER ═══
+
+validateStartup();
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
   console.log(`📱 WebSocket: ws://localhost:${PORT}`);
   console.log(`🔧 Database: PostgreSQL`);
+  console.log(`🔐 Security: Rate limiting, input validation, helmet headers enabled`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 process.on('SIGINT', async () => {
