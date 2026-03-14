@@ -181,9 +181,9 @@ const schemas = {
   querySchema: Joi.object({
     limit: Joi.number().integer().min(1).max(10000).default(100),
     offset: Joi.number().integer().min(0).max(1000000).default(0),
-    sheet_type: Joi.string().alpha(),
+    sheet_type: Joi.string().alphanum().max(50),
     owner: Joi.string().email(),
-    status: Joi.string().alpha(),
+    status: Joi.string().alphanum().max(50),
     filter: Joi.string().trim().max(500),
   }).unknown(true),
 };
