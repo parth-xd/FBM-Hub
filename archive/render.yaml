@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: babaclick-fbm-hub
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_URL
+        fromDatabase:
+          name: babaclick-db
+          property: connectionString
+    autoDeploy: true

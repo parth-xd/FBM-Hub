@@ -4,9 +4,11 @@
   "description": "Babaclick FBM Operations Hub - Email Auth, Admin Approval, Google Sheets Integration",
   "main": "server.js",
   "scripts": {
-    "start": "node server-sqlite.js",
-    "dev": "nodemon server-sqlite.js",
-    "migrate": "node migrate-sheets-to-sql.js"
+    "start": "node server-postgres.js",
+    "start-sqlite": "node server-sqlite.js",
+    "dev": "nodemon server-postgres.js",
+    "migrate": "node migrate-sheets-to-sql.js",
+    "import:shipstation": "node import-shipstation-csv.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -19,7 +21,9 @@
     "pg": "^8.11.3",
     "pg-pool": "^3.6.1",
     "resend": "^3.0.0",
-    "ws": "^8.15.1"
+    "sqlite3": "^6.0.1",
+    "ws": "^8.15.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
