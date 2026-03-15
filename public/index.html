@@ -4258,10 +4258,19 @@ function App() {
       
       // Convert snake_case from SQL to camelCase for frontend
       const parsed = orders.map(o => {
-        const mapped = mapDbOrderToFrontend(o);
-        mapped.colorStatus = calculateColorStatus(mapped);
-        return mapped;
-      });
+        if (!o || typeof o !== 'object') {
+          console.warn('Skipping invalid order:', o);
+          return null;
+        }
+        try {
+          const mapped = mapDbOrderToFrontend(o);
+          mapped.colorStatus = calculateColorStatus(mapped);
+          return mapped;
+        } catch(err) {
+          console.error('Error mapping order:', o, err);
+          return null;
+        }
+      }).filter(o => o !== null);
 
       console.log(`✓ Mapped ${parsed.length} orders to frontend format`);
       console.log(`📊 First mapped order:`, {
@@ -4334,20 +4343,22 @@ function App() {
         
         if (message.type === 'order-updated') {
           // Real-time update from another user
-          const { id, newData } = message.data;
-          console.log(`🔄 Real-time update from ${message.data.updatedBy}:`, newData);
+          const { id, updatedBy, ...newData } = message.data;
+          console.log(`🔄 Real-time update from ${updatedBy}:`, newData);
           
           setOrders(prev => prev.map(order => {
             if (order.id !== id) return order;
             const updated = {
               ...order,
+              // Map snake_case DB fields to camelCase frontend fields
               weight: newData.weight ?? order.weight,
               status: newData.status ?? order.status,
               labelPrinted: newData.label_printed !== undefined ? newData.label_printed : order.labelPrinted,
               qtyReceived: newData.qty_received ?? order.qtyReceived,
               discrepancy: newData.discrepancy ?? order.discrepancy,
-              beingEdited: !!newData.locked_by,
-              ...newData
+              exceptionReason: newData.exception_reason ?? order.exceptionReason,
+              exceptionPOCreated: newData.exception_po_created !== undefined ? newData.exception_po_created : order.exceptionPOCreated,
+              beingEdited: newData.locked_by ? !!newData.locked_by : order.beingEdited
             };
             updated.colorStatus = calculateColorStatus(updated);
             return updated;
@@ -4360,11 +4371,15 @@ function App() {
         
         if (message.type === 'order-created') {
           const raw = message.data?.order;
-          if (raw && raw.id) {
-            const newOrder = mapDbOrderToFrontend(raw);
-            newOrder.colorStatus = calculateColorStatus(newOrder);
-            // Avoid duplicates (e.g. exception PO creation)
-            setOrders(prev => prev.some(o => o.id === newOrder.id) ? prev : [newOrder, ...prev]);
+          if (raw && typeof raw === 'object' && raw.id) {
+            try {
+              const newOrder = mapDbOrderToFrontend(raw);
+              newOrder.colorStatus = calculateColorStatus(newOrder);
+              // Avoid duplicates (e.g. exception PO creation)
+              setOrders(prev => prev.some(o => o.id === newOrder.id) ? prev : [newOrder, ...prev]);
+            } catch(err) {
+              console.error('Error mapping newly created order:', raw, err);
+            }
           }
         }
         
