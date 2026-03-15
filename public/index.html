@@ -2932,7 +2932,8 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
       case 'bQty': return <span style={{fontFamily:'IBM Plex Mono',color:'#86868b',fontSize:11,textAlign:'center',display:'block'}}>{order.bQty??'—'}</span>;
       case 'weight': return <div style={{display:'flex',flexDirection:'column',gap:1,alignItems:'center'}}>
         <input type="number" step="0.01" min="0" value={order.weight??''} onClick={e=>e.stopPropagation()}
-          onChange={e=>{e.stopPropagation();const v=e.target.value===''?null:Number(e.target.value);updateOrder(order.id,{weight:v});syncCell(order.sheetRow,COL.weight,v===null?'':v);}}
+          onChange={e=>{e.stopPropagation();try{const v=e.target.value===''?null:Number(e.target.value);updateOrder(order.id,{weight:v});const syncValue=v===null||v===''?null:v;syncCell(order.id,24,syncValue);}catch(err){console.error('Weight update error:',err);}}}
+          onBlur={e=>{const v=e.target.value===''?null:Number(e.target.value);if(v!==null){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({weight:v})}).catch(console.error);}}}
           style={{width:55,background:'#f5f5f7',border:'1px solid #d2d2d7',borderRadius:5,color:order.weight!=null?'#0071e3':'#86868b',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}}
           placeholder="kg"/>
         {order.suggestedWeight!=null&&<div style={{fontSize:7,color:'#86868b',whiteSpace:'nowrap'}} title="Suggested weight from sheet">~{Number(order.suggestedWeight).toFixed(2)}kg</div>}
@@ -2941,13 +2942,14 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
       case 'hts': return <span style={{fontFamily:'IBM Plex Mono',color:'#a78bfa',fontSize:9}}>{order.htsCode||'—'}</span>;
       case 'profit': return <span style={{fontFamily:'IBM Plex Mono',fontSize:11,color:order.expectedProfit!=null?(Number(order.expectedProfit)>=0?'#22c55e':'#ef4444'):'#86868b'}}>{order.expectedProfit!=null?`$${Number(order.expectedProfit).toFixed(2)}`:'—'}</span>;
       case 'qtyRcvd': return <input type="number" min="0" value={order.qtyReceived??''} onClick={e=>e.stopPropagation()}
-        onChange={e=>{e.stopPropagation();const v=e.target.value===''?null:Number(e.target.value);const d=order.bQty!=null&&v!=null?Number(order.bQty)-v:null;updateOrder(order.id,{qtyReceived:v,discrepancy:d});syncCell(order.sheetRow,COL.qtyReceived,v===null?'':v);}}
+        onChange={e=>{e.stopPropagation();try{const v=e.target.value===''?null:Number(e.target.value);const d=order.bQty!=null&&v!=null?Number(order.bQty)-v:null;updateOrder(order.id,{qtyReceived:v,discrepancy:d});const syncValue=v===null||v===''?null:v;syncCell(order.id,28,syncValue);}catch(err){console.error('QtyReceived update error:',err);}}}
+        onBlur={e=>{const v=e.target.value===''?null:Number(e.target.value);if(v!==null){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({qty_received:v})}).catch(console.error);}}}
         style={{width:50,background:'#f5f5f7',border:'1px solid #d2d2d7',borderRadius:5,color:order.qtyReceived!=null&&order.bQty!=null&&Number(order.qtyReceived)!==Number(order.bQty)?'#ef4444':'#22c55e',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}}/>;
-      case 'disc': return <span style={{fontFamily:'IBM Plex Mono',color:Number(order.discrepancy)!==0?'#ef4444':'#86868b',fontWeight:Number(order.discrepancy)!==0?800:400,fontSize:11}}>{Number(order.discrepancy)!==0?order.discrepancy:'—'}</span>;
-      case 'label': return <button onClick={e=>{e.stopPropagation();const v=!order.labelPrinted;updateOrder(order.id,{labelPrinted:v});syncCell(order.sheetRow,COL.labelPrinted,v?'TRUE':'FALSE');logChange(order.orderId,'labelPrinted',!v,v,'From table view');}}
+      case 'disc': return <span style={{fontFamily:'IBM Plex Mono',color:order.discrepancy!=null&&Number(order.discrepancy)!==0?'#ef4444':'#86868b',fontWeight:order.discrepancy!=null&&Number(order.discrepancy)!==0?800:400,fontSize:11}}>{order.discrepancy!=null&&Number(order.discrepancy)!==0?Number(order.discrepancy):'—'}</span>;
+      case 'label': return <button onClick={e=>{e.stopPropagation();const v=!order.labelPrinted;updateOrder(order.id,{labelPrinted:v});syncCell(order.id,31,v?'TRUE':'FALSE');logChange(order.orderId,'labelPrinted',!v,v,'From table view');}}
         style={{background:order.labelPrinted?'rgba(34,197,94,0.18)':'#f5f5f7',border:`1px solid ${order.labelPrinted?'#22c55e40':'#d2d2d7'}`,color:order.labelPrinted?'#22c55e':'#6e6e73',borderRadius:6,padding:'3px 9px',cursor:'pointer',fontSize:13,fontWeight:700}}>
         {order.labelPrinted?'✓':'○'}
-      </button>;
+      </button>
       case 'lock': return ri.canLock?<button onClick={e=>{e.stopPropagation();const lockUrl=order.beingEdited?API.unlockOrder(order.id):API.lockOrder(order.id);const userEmail=window.CURRENT_USER?.email||'unknown';fetch(lockUrl,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({userEmail})}).then(r=>r.json()).then(data=>{updateOrder(order.id,{beingEdited:!!data?.order?.locked_by});}).catch(console.error);}}
         style={{background:order.beingEdited?'rgba(16,185,129,0.18)':'#f5f5f7',border:`1px solid ${order.beingEdited?'#10b98140':'#d2d2d7'}`,color:order.beingEdited?'#10b981':'#6e6e73',borderRadius:6,padding:'3px 8px',cursor:'pointer',fontSize:11,fontWeight:700}}>
         {order.beingEdited?'🔒':'✏'}
@@ -3106,7 +3108,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
                   style={{background:cs.bg,borderBottom:`1px solid ${isGroupEnd&&isMPO?'rgba(96,165,250,0.2)':cs.border}`,borderTop:isGroupStart?'2px solid rgba(96,165,250,0.25)':undefined,transition:'all .15s ease'}}>
                   {cols.map(c=>(
                     <td key={c} data-col={c} style={{padding:'4px 12px',verticalAlign:'middle',borderLeft:c==='status'&&isMPO?'3px solid rgba(96,165,250,0.35)':'none',lineHeight:1.2}}>
-                      {renderCell(c,order)}
+                      {(() => { try { return renderCell(c, order); } catch(err) { console.error(`Error rendering cell ${c} for order ${order.id}:`, err); return <span style={{color:'#ef4444',fontSize:10}}>Error</span>; } })()}
                     </td>
                   ))}
                 </tr>
@@ -4130,15 +4132,13 @@ function App() {
 
   const syncCell = React.useCallback(async(orderId, fieldName, value) => {
     try {
-      const userEmail = currentUser?.email || 'unknown';
-      
-      // Find the order to get its database ID
-      const order = orders.find(o => o.id === orderId || o.sheetRow === orderId);
-      if (!order) {
-        console.error('Order not found:', orderId);
+      if (value === null || value === undefined || value === '') {
+        // Don't sync null/empty values to avoid server errors
         return;
       }
 
+      const userEmail = currentUser?.email || 'unknown';
+      
       // Map column indices to field names (for backward compatibility)
       const fieldMap = {
         24: 'weight',          // Weight column
@@ -4156,9 +4156,9 @@ function App() {
         updateValue = value === 'TRUE' || value === true ? true : false;
       }
 
-      console.log(`📤 Syncing to SQL: Order ${order.id}, ${field} = ${updateValue}`);
+      console.log(`📤 Syncing to SQL: Order ${orderId}, ${field} = ${updateValue}`);
       
-      const res = await fetch(API.updateOrder(order.id), {
+      const res = await fetch(API.updateOrder(orderId), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -4168,7 +4168,8 @@ function App() {
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to sync: ${res.status}`);
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Failed to sync: ${res.status}`);
       }
 
       setWriteToast({ok: true, msg: `✓ Saved to database`});
@@ -4178,7 +4179,7 @@ function App() {
       setWriteToast({ok: false, msg: `Write failed: ${e.message}`});
       setTimeout(() => setWriteToast(null), 3000);
     }
-  }, [orders, currentUser]);
+  }, [currentUser]);
 
   // Track order changes for undo history (max 20 states)
   React.useEffect(() => {
