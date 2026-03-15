@@ -88,8 +88,132 @@ pool.query('SELECT NOW()', (err, res) => {
     }
   } else {
     console.log('✅ PostgreSQL Database connected:', res.rows[0].now);
+    // Auto-initialize tables if they don't exist
+    initializeDatabase();
   }
 });
+
+// ═══ AUTO-INITIALIZE DATABASE TABLES ═══
+const initializeDatabase = async () => {
+  try {
+    // Check if orders table exists
+    const result = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'orders'
+      )
+    `);
+    
+    if (result.rows[0].exists) {
+      console.log('✅ Database tables already exist');
+      return;
+    }
+
+    console.log('🔧 Creating database tables...');
+
+    // Create orders table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        order_id VARCHAR(100) NOT NULL,
+        sku VARCHAR(100),
+        qty INTEGER,
+        product_name TEXT,
+        order_date DATE,
+        delivery_date DATE,
+        ship_by_date DATE,
+        carrier VARCHAR(100),
+        tracking_num VARCHAR(255),
+        total_sell_price NUMERIC(10, 2),
+        buy_link TEXT,
+        po_id VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'pending',
+        exception_type VARCHAR(100),
+        exception_notes TEXT,
+        dhl BOOLEAN DEFAULT FALSE,
+        asin VARCHAR(100),
+        imported_by VARCHAR(255),
+        imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create users table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255),
+        role VARCHAR(50) DEFAULT 'importer',
+        approved BOOLEAN DEFAULT FALSE,
+        approved_at TIMESTAMP,
+        approved_by VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create audit_logs table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+        user_email VARCHAR(255),
+        action VARCHAR(100),
+        field_name VARCHAR(100),
+        old_value TEXT,
+        new_value TEXT,
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create FBA products table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS fba_products (
+        id SERIAL PRIMARY KEY,
+        sku VARCHAR(255) UNIQUE NOT NULL,
+        asin VARCHAR(50),
+        product_name VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create FBA approvals table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS fba_approvals (
+        id SERIAL PRIMARY KEY,
+        sku VARCHAR(255) NOT NULL,
+        requested_by VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'pending',
+        approved_by VARCHAR(255),
+        approved_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create FBA STB counter table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS fba_stb_counter (
+        sku VARCHAR(255) PRIMARY KEY,
+        monthly_counter INTEGER DEFAULT 0,
+        reset_date DATE DEFAULT CURRENT_DATE
+      )
+    `);
+
+    // Create indexes
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_orders_order_id ON orders(order_id);
+      CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+      CREATE INDEX IF NOT EXISTS idx_orders_sku ON orders(sku);
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      CREATE INDEX IF NOT EXISTS idx_fba_sku ON fba_products(sku);
+    `);
+
+    console.log('✅ Database tables created successfully');
+  } catch (err) {
+    console.error('❌ Database initialization error:', err.message);
+  }
+};
 
 // ═══ IN-MEMORY DATA FOR AUTH ═══
 const users = new Map();
@@ -1215,114 +1339,12 @@ app.get('/api/schema', (req, res) => {
   });
 });
 
-// ═══ DATABASE INITIALIZATION ENDPOINT ═══
+// ═══ MANUAL DATABASE INITIALIZATION ENDPOINT ═══
+// (Usually not needed - tables auto-initialize on startup, but this is here for manual trigger)
 app.post('/api/init-db', async (req, res) => {
   try {
-    // Safety: Only allow in development or with special token
-    if (process.env.NODE_ENV === 'production' && req.headers['x-init-token'] !== process.env.JWT_SECRET) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    console.log('🔧 Initializing database schema...');
-
-    // Create orders table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS orders (
-        id SERIAL PRIMARY KEY,
-        order_id VARCHAR(100) NOT NULL,
-        sku VARCHAR(100),
-        qty INTEGER,
-        product_name TEXT,
-        order_date DATE,
-        delivery_date DATE,
-        ship_by_date DATE,
-        carrier VARCHAR(100),
-        tracking_num VARCHAR(255),
-        total_sell_price NUMERIC(10, 2),
-        buy_link TEXT,
-        po_id VARCHAR(100),
-        status VARCHAR(50) DEFAULT 'pending',
-        exception_type VARCHAR(100),
-        exception_notes TEXT,
-        dhl BOOLEAN DEFAULT FALSE,
-        asin VARCHAR(100),
-        imported_by VARCHAR(255),
-        imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create users table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255),
-        role VARCHAR(50) DEFAULT 'importer',
-        approved BOOLEAN DEFAULT FALSE,
-        approved_at TIMESTAMP,
-        approved_by VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create audit_logs table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id SERIAL PRIMARY KEY,
-        order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
-        user_email VARCHAR(255),
-        action VARCHAR(100),
-        field_name VARCHAR(100),
-        old_value TEXT,
-        new_value TEXT,
-        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create FBA products table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS fba_products (
-        id SERIAL PRIMARY KEY,
-        sku VARCHAR(255) UNIQUE NOT NULL,
-        asin VARCHAR(50),
-        product_name VARCHAR(500),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create FBA approvals table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS fba_approvals (
-        id SERIAL PRIMARY KEY,
-        sku VARCHAR(255) NOT NULL,
-        requested_by VARCHAR(255),
-        status VARCHAR(50) DEFAULT 'pending',
-        approved_by VARCHAR(255),
-        approved_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create FBA STB counter table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS fba_stb_counter (
-        sku VARCHAR(255) PRIMARY KEY,
-        monthly_counter INTEGER DEFAULT 0,
-        reset_date DATE DEFAULT CURRENT_DATE
-      )
-    `);
-
-    // Create indexes
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_orders_order_id ON orders(order_id);
-      CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-      CREATE INDEX IF NOT EXISTS idx_orders_sku ON orders(sku);
-      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-      CREATE INDEX IF NOT EXISTS idx_fba_sku ON fba_products(sku);
-    `);
-
+    console.log('🔧 Manual database initialization triggered...');
+    await initializeDatabase();
     res.json({ 
       ok: true, 
       message: 'Database schema initialized successfully',
