@@ -1215,6 +1215,125 @@ app.get('/api/schema', (req, res) => {
   });
 });
 
+// ═══ DATABASE INITIALIZATION ENDPOINT ═══
+app.post('/api/init-db', async (req, res) => {
+  try {
+    // Safety: Only allow in development or with special token
+    if (process.env.NODE_ENV === 'production' && req.headers['x-init-token'] !== process.env.JWT_SECRET) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    console.log('🔧 Initializing database schema...');
+
+    // Create orders table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        order_id VARCHAR(100) NOT NULL,
+        sku VARCHAR(100),
+        qty INTEGER,
+        product_name TEXT,
+        order_date DATE,
+        delivery_date DATE,
+        ship_by_date DATE,
+        carrier VARCHAR(100),
+        tracking_num VARCHAR(255),
+        total_sell_price NUMERIC(10, 2),
+        buy_link TEXT,
+        po_id VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'pending',
+        exception_type VARCHAR(100),
+        exception_notes TEXT,
+        dhl BOOLEAN DEFAULT FALSE,
+        asin VARCHAR(100),
+        imported_by VARCHAR(255),
+        imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create users table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255),
+        role VARCHAR(50) DEFAULT 'importer',
+        approved BOOLEAN DEFAULT FALSE,
+        approved_at TIMESTAMP,
+        approved_by VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create audit_logs table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+        user_email VARCHAR(255),
+        action VARCHAR(100),
+        field_name VARCHAR(100),
+        old_value TEXT,
+        new_value TEXT,
+        changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create FBA products table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS fba_products (
+        id SERIAL PRIMARY KEY,
+        sku VARCHAR(255) UNIQUE NOT NULL,
+        asin VARCHAR(50),
+        product_name VARCHAR(500),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create FBA approvals table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS fba_approvals (
+        id SERIAL PRIMARY KEY,
+        sku VARCHAR(255) NOT NULL,
+        requested_by VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'pending',
+        approved_by VARCHAR(255),
+        approved_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create FBA STB counter table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS fba_stb_counter (
+        sku VARCHAR(255) PRIMARY KEY,
+        monthly_counter INTEGER DEFAULT 0,
+        reset_date DATE DEFAULT CURRENT_DATE
+      )
+    `);
+
+    // Create indexes
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_orders_order_id ON orders(order_id);
+      CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+      CREATE INDEX IF NOT EXISTS idx_orders_sku ON orders(sku);
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      CREATE INDEX IF NOT EXISTS idx_fba_sku ON fba_products(sku);
+    `);
+
+    res.json({ 
+      ok: true, 
+      message: 'Database schema initialized successfully',
+      tables: ['orders', 'users', 'audit_logs', 'fba_products', 'fba_approvals', 'fba_stb_counter']
+    });
+  } catch (err) {
+    console.error('❌ Database initialization error:', err.message);
+    res.status(500).json({ error: 'Failed to initialize database', details: err.message });
+  }
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
