@@ -293,17 +293,19 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   .kv { padding: 8px 10px; }
   .kv .kval { font-size: 13px; }
   
-  /* Stats bar - stack vertically */
-  [role="statsbar"] { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; padding: 8px 12px !important; }
-  [role="statsbar"] > div { flex: 1 1 calc(50% - 4px) !important; }
+  /* Stats bar - compact 2x2 grid */
+  [role="statsbar"] { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 4px 12px !important; padding: 6px 12px !important; }
+  [role="statsbar"] > div { min-width: 0 !important; }
   
-  /* Filter bar - wrap and adjust */
-  [role="filterbar"] { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; padding: 8px 12px !important; }
-  [role="filterbar"] > input, [role="filterbar"] > select { flex: 1 1 calc(50% - 4px) !important; min-width: 0 !important; }
-  [role="filterbar"] > button { flex: 1 1 calc(50% - 4px) !important; }
+  /* Filter bar - horizontal scroll on mobile, no wrapping */
+  [role="filterbar"] { display: flex !important; flex-wrap: nowrap !important; gap: 6px !important; padding: 6px 12px !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+  [role="filterbar"] > input, [role="filterbar"] > select { flex: 0 0 auto !important; min-width: 100px !important; width: auto !important; }
+  [role="filterbar"] > button { flex: 0 0 auto !important; white-space: nowrap !important; }
+  [role="filterbar"] > div[style*="flex:1"], [role="filterbar"] > div[style*="flex: 1"] { flex: 0 0 4px !important; min-width: 0 !important; }
   
-  /* Filter pills - wrap */
-  [role="filterpills"] { display: flex !important; gap: 6px !important; padding: 6px 12px !important; overflow-x: auto !important; flex-wrap: wrap !important; }
+  /* Filter pills - horizontal scroll */
+  [role="filterpills"] { display: flex !important; gap: 4px !important; padding: 4px 12px !important; overflow-x: auto !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch !important; }
+  [role="filterpills"] > button { flex: 0 0 auto !important; }
   
   /* Selection bar - compact */
   [role="selectionbar"] { padding: 8px 12px !important; gap: 8px !important; }
@@ -314,13 +316,13 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
 }
 
 @media (max-width: 600px) {
-  /* Stats bar - show 2 per row */
-  [role="statsbar"] > div { flex: 1 1 calc(50% - 4px) !important; min-width: 0 !important; }
-  [role="statsbar"] > div > div:first-child { font-size: 9px !important; }
-  [role="statsbar"] > div > div:last-child { font-size: 18px !important; }
+  /* Stats bar - compact grid */
+  [role="statsbar"] { grid-template-columns: 1fr 1fr 1fr !important; gap: 2px 8px !important; padding: 4px 12px !important; }
+  [role="statsbar"] > div > div:first-child { font-size: 8px !important; }
+  [role="statsbar"] > div > div:last-child { font-size: 16px !important; }
   
   /* Hide secondary stats on very small screens */
-  [role="statsbar"] > div:nth-child(n+5) { display: none !important; }
+  [role="statsbar"] > div:nth-child(n+7) { display: none !important; }
 }
 
 @media (max-width: 480px) {
@@ -341,15 +343,14 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   textarea { min-height: 100px; }
   .section-title { font-size: 10px; }
   
-  /* Mobile-first stacking */
-  [role="statsbar"] > div { flex: 1 1 calc(50% - 4px) !important; }
+  /* Stats bar - compact 3-col grid */
+  [role="statsbar"] { grid-template-columns: 1fr 1fr 1fr !important; gap: 2px 6px !important; padding: 4px 10px !important; }
   [role="statsbar"] > div > div:first-child { font-size: 8px !important; }
-  [role="statsbar"] > div > div:last-child { font-size: 16px !important; }
+  [role="statsbar"] > div > div:last-child { font-size: 15px !important; }
   
-  [role="filterbar"] > input, [role="filterbar"] > select, [role="filterbar"] > button { flex: 1 1 100% !important; width: 100% !important; }
-  
-  /* Hide tertiary buttons on mobile */
-  [role="filterbar"] > button:nth-child(n+3) { display: none !important; }
+  /* Filter bar - keep inline */
+  [role="filterbar"] > input, [role="filterbar"] > select { flex: 0 0 auto !important; min-width: 90px !important; width: auto !important; }
+  [role="filterbar"] > button { flex: 0 0 auto !important; }
   
   [role="selectionbar"] { padding: 6px 8px !important; flex-wrap: wrap !important; }
   [role="selectionbar"] > span { font-size: 11px !important; }
@@ -363,13 +364,11 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   th, td { padding: 5px 3px; }
   
   /* Very compact mobile */
-  [role="statsbar"] > div { flex: 1 1 calc(50% - 4px) !important; }
+  [role="statsbar"] { grid-template-columns: 1fr 1fr 1fr !important; gap: 1px 4px !important; padding: 3px 8px !important; }
   [role="statsbar"] > div > div:first-child { font-size: 7px !important; }
-  [role="statsbar"] > div > div:last-child { font-size: 14px !important; }
+  [role="statsbar"] > div > div:last-child { font-size: 13px !important; }
   
-  [role="filterbar"] { gap: 6px !important; padding: 6px 8px !important; }
-  [role="filterbar"] > input, [role="filterbar"] > select { flex: 1 1 100% !important; }
-  [role="filterbar"] > button { flex: 1 1 100% !important; }
+  [role="filterbar"] { gap: 4px !important; padding: 4px 8px !important; }
 }
 
 @media (hover: none) and (pointer: coarse) {
@@ -455,6 +454,8 @@ div[role="filters"] > button { flex: 0 0 auto; }
   div[role="pagination"] > div:first-child { width: 100%; flex-wrap: wrap; }
   div[role="pagination"] > div:last-child { width: 100%; flex-wrap: wrap; gap: 3px; }
   div[role="pagination"] button { padding: 4px 5px; font-size: 9px; }
+  /* Hide footer legend on small phones — save vertical space */
+  .footer-legend { display: none !important; }
 }
 
 /* ═══ MOBILE MENU (Apple slide-in) ═══ */
@@ -503,11 +504,11 @@ div[role="filters"] > button { flex: 0 0 auto; }
 .hamburger-btn {
   display: none; background: none; border: none;
   color: var(--apple-text); font-size: 22px; cursor: pointer;
-  padding: 6px 8px; margin-right: 4px;
+  padding: 4px 6px; margin-right: 2px;
   transition: all 0.3s var(--apple-transition);
   z-index: 170; -webkit-user-select: none; user-select: none;
-  width: 40px; height: 40px;
-  display: flex !important; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  align-items: center; justify-content: center;
 }
 .hamburger-btn:active { color: var(--apple-blue); transform: scale(0.92); }
 
@@ -516,7 +517,7 @@ div[role="filters"] > button { flex: 0 0 auto; }
   .desktop-nav-tabs { display: none !important; }
   .header-sync-status { display: none !important; }
   .header-user-pill { display: none !important; }
-  .header-logo-full { display: none; }
+  .header-logo-full { display: none !important; }
   .header-logo-compact { display: flex !important; }
 }
 </style>
@@ -3107,18 +3108,18 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         </table>
       </div>
 
-      {/* Footer: Legend + Pagination */}
-      <div style={{padding:'6px 24px',borderTop:'1px solid rgba(0,0,0,0.06)',display:'flex',gap:12,flexWrap:'nowrap',alignItems:'center',backgroundColor:'#fff',width:'100%',boxSizing:'border-box'}}>
-        <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',flex:'1 1 auto',minWidth:0}}>
-          {Object.entries(STATE).map(([k,s])=><div key={k} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#86868b',whiteSpace:'nowrap'}}>
-            <div style={{width:6,height:6,borderRadius:3,background:s.badge}}/>{s.label}
+      {/* Footer: Pagination (legend hidden on mobile for space) */}
+      <div style={{padding:'4px 12px',borderTop:'1px solid rgba(0,0,0,0.06)',display:'flex',gap:8,flexWrap:'nowrap',alignItems:'center',backgroundColor:'#fff',width:'100%',boxSizing:'border-box',minHeight:36}}>
+        <div className="footer-legend" style={{display:'flex',gap:8,alignItems:'center',flexWrap:'nowrap',flex:'1 1 auto',minWidth:0,overflow:'hidden'}}>
+          {Object.entries(STATE).map(([k,s])=><div key={k} style={{display:'flex',alignItems:'center',gap:3,fontSize:10,color:'#86868b',whiteSpace:'nowrap'}}>
+            <div style={{width:5,height:5,borderRadius:3,background:s.badge,flexShrink:0}}/>{s.label}
           </div>)}
         </div>
-        <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0}}>
-          <select value={pageSize} onChange={e=>{const v=e.target.value==='all'?filtered.length:Number(e.target.value);setPageSize(v);}} style={{background:'#f5f5f7',border:'none',color:'#1d1d1f',padding:'4px 8px',borderRadius:8,fontSize:12}}>
+        <div style={{display:'flex',gap:4,alignItems:'center',flexShrink:0}}>
+          <select value={pageSize} onChange={e=>{const v=e.target.value==='all'?filtered.length:Number(e.target.value);setPageSize(v);}} style={{background:'#f5f5f7',border:'none',color:'#1d1d1f',padding:'3px 6px',borderRadius:8,fontSize:11,height:28}}>
             <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option><option value={200}>200</option><option value={500}>500</option><option value="all">All</option>
           </select>
-          <div style={{fontSize:12,color:'#86868b',fontFamily:'IBM Plex Mono',whiteSpace:'nowrap'}}>{filtered.length?`${startIndex+1}–${endIndex} of ${filtered.length}`:'0'}</div>
+          <div style={{fontSize:10,color:'#86868b',fontFamily:'IBM Plex Mono',whiteSpace:'nowrap'}}>{filtered.length?`${startIndex+1}–${endIndex} of ${filtered.length}`:'0'}</div>
           <button className="btn" style={{padding:'3px 6px',fontSize:9,minHeight:'auto',minWidth:'auto'}} onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page<=0}>‹</button>
           <div style={{fontFamily:'IBM Plex Mono',color:'#86868b',fontSize:9,whiteSpace:'nowrap'}}>{page+1}/{totalPages}</div>
           <button className="btn" style={{padding:'3px 6px',fontSize:9,minHeight:'auto',minWidth:'auto'}} onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page+1>=totalPages}>›</button>
