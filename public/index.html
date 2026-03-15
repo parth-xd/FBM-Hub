@@ -963,12 +963,12 @@ function rowState(o) {
 }
 
 const STATE = {
-  editing:    {bg:'rgba(16,185,129,0.12)',border:'#10b98160',badge:'#10b981',tagBg:'rgba(16,185,129,0.18)',label:'🔒 Importing'},
-  discrepancy:{bg:'rgba(239,68,68,0.08)', border:'#ef444440',badge:'#ef4444',tagBg:'rgba(239,68,68,0.18)',label:'⚠ Discrepancy'},
-  shipped:    {bg:'rgba(34,197,94,0.06)', border:'#22c55e30',badge:'#22c55e',tagBg:'rgba(34,197,94,0.18)',label:'✓ Shipped'},
-  ready:      {bg:'rgba(249,115,22,0.08)',border:'#f9731640',badge:'#f97316',tagBg:'rgba(249,115,22,0.18)',label:'📦 Pack Now'},
-  partial:    {bg:'rgba(234,179,8,0.07)', border:'#eab30840',badge:'#eab308',tagBg:'rgba(234,179,8,0.18)',label:'⏳ Partial'},
-  pending:    {bg:'transparent',          border:'#e8e8ed',badge:'#86868b',tagBg:'rgba(71,85,105,0.12)',label:'○ Pending'},
+  editing:    {bg:'rgba(16,185,129,0.12)',border:'#10b98160',badge:'#10b981',tagBg:'rgba(16,185,129,0.18)',label:'Importing'},
+  discrepancy:{bg:'rgba(239,68,68,0.08)', border:'#ef444440',badge:'#ef4444',tagBg:'rgba(239,68,68,0.18)',label:'Discrepancy'},
+  shipped:    {bg:'rgba(34,197,94,0.06)', border:'#22c55e30',badge:'#22c55e',tagBg:'rgba(34,197,94,0.18)',label:'Shipped'},
+  ready:      {bg:'rgba(249,115,22,0.08)',border:'#f9731640',badge:'#f97316',tagBg:'rgba(249,115,22,0.18)',label:'Pack Now'},
+  partial:    {bg:'rgba(234,179,8,0.07)', border:'#eab30840',badge:'#eab308',tagBg:'rgba(234,179,8,0.18)',label:'Partial'},
+  pending:    {bg:'transparent',          border:'#e8e8ed',badge:'#86868b',tagBg:'rgba(71,85,105,0.12)',label:'Pending'},
 };
 
 /* ═══ COLOR STATUS (row background) ═══ */
@@ -1294,7 +1294,7 @@ function LoginScreen({onLogin}) {
       <div style={{width: 'min(100%, 400px)'}}>
         {/* Logo — Apple-clean centered */}
         <div style={{textAlign:'center', marginBottom:40}}>
-          <div style={{width:56, height:56, background:'#1d1d1f', borderRadius:14, display:'flex', alignItems:'center', justifyContent:'center', fontSize:26, margin:'0 auto 16px', boxShadow:'0 4px 20px rgba(0,0,0,0.12)'}}>📦</div>
+          <div style={{width:56, height:56, background:'#1d1d1f', borderRadius:14, display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 16px', boxShadow:'0 4px 20px rgba(0,0,0,0.12)', fontWeight:700, color:'#fff'}}>B</div>
           <div style={{fontSize:28, fontWeight:700, color:'#1d1d1f', letterSpacing:'-0.03em', lineHeight:1.1}}>FBM Operations</div>
           <div style={{color:'#86868b', fontSize:14, marginTop:8, fontWeight:400, letterSpacing:'-0.01em'}}>Sign in to your Babaclick hub</div>
         </div>
@@ -3033,26 +3033,26 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
 
   return (
     <div style={{display:'flex',flexDirection:'column',height:'calc(100vh - 52px)',paddingTop:'0px',background:'#f5f5f7',overflow:'hidden'}}>
-      {/* Stats bar - compact */}
+      {/* Stats bar - compact with centered text */}
       <div role="statsbar" style={{display:'flex',gap:12,padding:'8px 16px',background:'#fff',borderBottom:'1px solid rgba(0,0,0,0.06)',alignItems:'center',flexWrap:'wrap'}}>
-        <div><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>All</div><div style={{fontSize:14,fontWeight:700,color:'#1d1d1f'}}>{orders.length}</div></div>
-        <div><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>Pending</div><div style={{fontSize:14,fontWeight:700,color:'#86868b'}}>{orders.filter(o=>rowState(o)==='pending').length}</div></div>
-        <div><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>Pack Now</div><div style={{fontSize:14,fontWeight:700,color:'#ff9f0a'}}>{stats.ready}</div></div>
-        <div><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>Shipped</div><div style={{fontSize:14,fontWeight:700,color:'#34c759'}}>{stats.shipped}</div></div>
-        <div><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>DHL</div><div style={{fontSize:14,fontWeight:700,color:'#ff9f0a'}}>{stats.dhl}</div></div>
-        <div><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>Exceptions</div><div style={{fontSize:14,fontWeight:700,color:'#ff3b30'}}>{stats.exceptions}</div></div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center'}}><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>All</div><div style={{fontSize:14,fontWeight:700,color:'#1d1d1f'}}>{orders.length}</div></div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center'}}><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>Pending</div><div style={{fontSize:14,fontWeight:700,color:'#86868b'}}>{orders.filter(o=>rowState(o)==='pending').length}</div></div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center'}}><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>Pack Now</div><div style={{fontSize:14,fontWeight:700,color:'#ff9f0a'}}>{stats.ready}</div></div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center'}}><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>Shipped</div><div style={{fontSize:14,fontWeight:700,color:'#34c759'}}>{stats.shipped}</div></div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center'}}><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>DHL</div><div style={{fontSize:14,fontWeight:700,color:'#ff9f0a'}}>{stats.dhl}</div></div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center'}}><div style={{fontSize:10,color:'#86868b',fontWeight:500}}>Exceptions</div><div style={{fontSize:14,fontWeight:700,color:'#ff3b30'}}>{stats.exceptions}</div></div>
       </div>
 
       {/* Filter bar - search, supplier, date on left; import buttons on right */}
       <div role="filterbar" style={{display:'flex',gap:8,padding:'6px 16px',background:'#fff',borderBottom:'1px solid rgba(0,0,0,0.06)',alignItems:'center',flexWrap:'nowrap',overflow:'auto'}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." className="input" style={{flex:'0 1 120px',minWidth:80,padding:'5px 8px',fontSize:'11px',height:28}} />
-        <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 1 120px',minWidth:80,padding:'5px 8px',fontSize:'11px',height:28}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." className="input" style={{flex:'0 1 120px',minWidth:80,padding:'6px 8px',fontSize:'11px',height:32}} />
+        <select value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)} className="input" style={{flex:'0 1 120px',minWidth:80,padding:'6px 8px',fontSize:'11px',height:32,appearance:'none',backgroundImage:'url("data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"8\" viewBox=\"0 0 12 8\"%3E%3Cpath d=\"M0 0l6 8 6-8\" fill=\"%2386868b\"/%3E%3C/svg%3E")',backgroundRepeat:'no-repeat',backgroundPosition:'right 8px center',paddingRight:24}}>
           <option value="">Suppliers</option>
           {[...new Set(orders.filter(o=>o.buyLink).map(o=>getSupplier(o.buyLink).name))].sort().map(s=>(
             <option key={s} value={s}>{s.substring(0,20)}</option>
           ))}
         </select>
-        <input type="date" value={deliveryDateFilter} onChange={e=>setDeliveryDateFilter(e.target.value)} className="input" style={{flex:'0 1 120px',minWidth:80,padding:'5px 8px',fontSize:'11px',height:28}}/>
+        <input type="date" value={deliveryDateFilter} onChange={e=>setDeliveryDateFilter(e.target.value)} className="input" style={{flex:'0 1 120px',minWidth:80,padding:'6px 8px',fontSize:'11px',height:32}}/>
         
         <div style={{flex:1}}/>
         
@@ -3118,20 +3118,20 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
       </div>
 
       {/* Footer: Pagination (legend hidden on mobile for space) */}
-      <div style={{padding:'4px 12px',borderTop:'1px solid rgba(0,0,0,0.06)',display:'flex',gap:8,flexWrap:'nowrap',alignItems:'center',backgroundColor:'#fff',width:'100%',boxSizing:'border-box',minHeight:36}}>
+      <div style={{padding:'6px 12px',borderTop:'1px solid rgba(0,0,0,0.08)',display:'flex',gap:10,flexWrap:'nowrap',alignItems:'center',backgroundColor:'#fff',width:'100%',boxSizing:'border-box',minHeight:40}}>
         <div className="footer-legend" style={{display:'flex',gap:8,alignItems:'center',flexWrap:'nowrap',flex:'1 1 auto',minWidth:0,overflow:'hidden'}}>
-          {Object.entries(STATE).map(([k,s])=><div key={k} style={{display:'flex',alignItems:'center',gap:3,fontSize:10,color:'#86868b',whiteSpace:'nowrap'}}>
-            <div style={{width:5,height:5,borderRadius:3,background:s.badge,flexShrink:0}}/>{s.label}
+          {Object.entries(STATE).map(([k,s])=><div key={k} style={{display:'flex',alignItems:'center',gap:3,fontSize:9,color:'#86868b',whiteSpace:'nowrap'}}>
+            <div style={{width:6,height:6,borderRadius:2,background:s.badge,flexShrink:0}}/>{s.label}
           </div>)}
         </div>
-        <div style={{display:'flex',gap:4,alignItems:'center',flexShrink:0}}>
-          <select value={pageSize} onChange={e=>{const v=e.target.value==='all'?filtered.length:Number(e.target.value);setPageSize(v);}} style={{background:'#f5f5f7',border:'none',color:'#1d1d1f',padding:'3px 6px',borderRadius:8,fontSize:11,height:28}}>
+        <div style={{display:'flex',gap:6,alignItems:'center',flexShrink:0}}>
+          <select value={pageSize} onChange={e=>{const v=e.target.value==='all'?filtered.length:Number(e.target.value);setPageSize(v);}} style={{background:'#f5f5f7',border:'none',color:'#1d1d1f',padding:'4px 8px',borderRadius:8,fontSize:10,height:30}}>
             <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option><option value={200}>200</option><option value={500}>500</option><option value="all">All</option>
           </select>
           <div style={{fontSize:10,color:'#86868b',fontFamily:'IBM Plex Mono',whiteSpace:'nowrap'}}>{filtered.length?`${startIndex+1}–${endIndex} of ${filtered.length}`:'0'}</div>
-          <button className="btn" style={{padding:'3px 6px',fontSize:9,minHeight:'auto',minWidth:'auto'}} onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page<=0}>‹</button>
+          <button className="btn" style={{padding:'4px 7px',fontSize:10,minHeight:'auto',minWidth:'auto'}} onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page<=0}>‹</button>
           <div style={{fontFamily:'IBM Plex Mono',color:'#86868b',fontSize:9,whiteSpace:'nowrap'}}>{page+1}/{totalPages}</div>
-          <button className="btn" style={{padding:'3px 6px',fontSize:9,minHeight:'auto',minWidth:'auto'}} onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page+1>=totalPages}>›</button>
+          <button className="btn" style={{padding:'4px 7px',fontSize:10,minHeight:'auto',minWidth:'auto'}} onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page+1>=totalPages}>›</button>
         </div>
       </div>
 
@@ -3239,7 +3239,7 @@ function MultiPOModal({order, suppliers, onClose, onCreate, getCombinedDiscrepan
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" onClick={e=>e.stopPropagation()}>
         <div style={{padding:24}}>
-          <div style={{fontSize:16,fontWeight:700,color:'#1d1d1f',marginBottom:20}}>📦 Create Multi PO</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#1d1d1f',marginBottom:20}}>Create Multi PO</div>
           
           <div style={{background:'rgba(96,165,250,0.08)',border:'1px solid rgba(96,165,250,0.2)',borderRadius:8,padding:16,marginBottom:20}}>
             <div style={{fontSize:11,color:'#86868b',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700,marginBottom:8}}>Order Details</div>
@@ -3413,7 +3413,7 @@ function FBAMissionControl({currentUser,role,sheetType}) {
   const [editRow,setEditRow] = React.useState(null); // product being edited/created
   const [search,setSearch] = React.useState('');
   const isOwner = role === 'owner';
-  const title = sheetType === 'mission_control' ? '🚀 Mission Control' : '📝 Personal Reckon';
+  const title = sheetType === 'mission_control' ? 'Mission Control' : 'Personal Reckon';
   const subtitle = sheetType === 'mission_control' 
     ? (isOwner ? 'View team members\' verified product sourcing data' : 'Your verified product sourcing data — syncs to Central Command')
     : 'Your informal scratch pad — not synced or checked';
@@ -4487,17 +4487,17 @@ function App() {
   const activeSection = activeTab.startsWith('fba-') ? 'fba' : 'fbm';
 
   const FBM_TABS=[
-    ...(ri.canSeeAnalytics?[{k:'dashboard',l:'📊 Dashboard'}]:[]),
-    {k:'operations',l:'📦 Operations'},
-    {k:'ins',l:'🗃 INS Stock'},
-    ...(ri.canSeeAnalytics?[{k:'audit',l:'📋 Audit Log'}]:[]),
+    ...(ri.canSeeAnalytics?[{k:'dashboard',l:'Dashboard'}]:[]),
+    {k:'operations',l:'Operations'},
+    {k:'ins',l:'INS Stock'},
+    ...(ri.canSeeAnalytics?[{k:'audit',l:'Audit Log'}]:[]),
   ];
 
   const FBA_TABS=[
-    {k:'fba-central',l:'🎯 Central Command'},
-    {k:'fba-mission',l:'🚀 Mission Control'},
-    ...(!ri.canSeeAnalytics?[{k:'fba-reckon',l:'📝 Personal Reckon'}]:[]),
-    ...(ri.canSeeAnalytics?[{k:'fba-expense',l:'💰 Expense / Approval'}]:[]),
+    {k:'fba-central',l:'Central Command'},
+    {k:'fba-mission',l:'Mission Control'},
+    ...(!ri.canSeeAnalytics?[{k:'fba-reckon',l:'Personal Reckon'}]:[]),
+    ...(ri.canSeeAnalytics?[{k:'fba-expense',l:'Expense / Approval'}]:[]),
   ];
 
   const TABS = activeSection === 'fba' ? FBA_TABS : FBM_TABS;
@@ -4528,7 +4528,7 @@ function App() {
 
           {/* Logo + Section Toggle (desktop) */}
           <div style={{display:'flex',alignItems:'center',gap:10,marginRight:8,minWidth:'fit-content'}} className="header-logo-full">
-            <div style={{width:34,height:34,background:'#1d1d1f',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{activeSection==='fba'?'🚀':'📦'}</div>
+            <div style={{width:34,height:34,background:'#1d1d1f',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700,color:'#fff',flexShrink:0}}>{activeSection==='fba'?'FBA':'FBM'}</div>
             <div style={{display:'flex',alignItems:'center',gap:0,background:'#f0f0f5',borderRadius:8,padding:2}}>
               <button onClick={()=>switchSection('fbm')} style={{padding:'4px 12px',borderRadius:6,border:'none',fontSize:13,fontWeight:600,cursor:'pointer',background:activeSection==='fbm'?'#fff':'transparent',color:activeSection==='fbm'?'#1d1d1f':'#86868b',boxShadow:activeSection==='fbm'?'0 1px 3px rgba(0,0,0,0.1)':'none',transition:'all 0.2s'}}>FBM</button>
               <button onClick={()=>switchSection('fba')} style={{padding:'4px 12px',borderRadius:6,border:'none',fontSize:13,fontWeight:600,cursor:'pointer',background:activeSection==='fba'?'#fff':'transparent',color:activeSection==='fba'?'#1d1d1f':'#86868b',boxShadow:activeSection==='fba'?'0 1px 3px rgba(0,0,0,0.1)':'none',transition:'all 0.2s'}}>FBA</button>
@@ -4537,7 +4537,7 @@ function App() {
 
           {/* Logo - Compact version (mobile) */}
           <div style={{display:'none',alignItems:'center',gap:6,marginRight:6,flexShrink:0}} className="header-logo-compact">
-            <div style={{width:32,height:32,background:'#1d1d1f',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{activeSection==='fba'?'🚀':'📦'}</div>
+            <div style={{width:32,height:32,background:'#1d1d1f',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#fff',flexShrink:0}}>{activeSection==='fba'?'FBA':'FBM'}</div>
           </div>
 
           {/* Nav tabs - Desktop only (contextual per section) */}
@@ -4561,7 +4561,7 @@ function App() {
             <span style={{fontSize:13,color:'#1d1d1f',fontWeight:500,whiteSpace:'nowrap'}}>{currentUser?.name}</span>
           </div>
 
-          {ri.canManage&&<button style={{background:'none',border:'none',color:'#86868b',padding:'6px 8px',fontSize:18,flexShrink:0,cursor:'pointer',borderRadius:8,transition:'color 0.2s'}} onClick={()=>setShowUsers(true)} title="Manage users">👥</button>}
+          {ri.canManage&&<button style={{background:'none',border:'none',color:'#86868b',padding:'6px 8px',fontSize:18,flexShrink:0,cursor:'pointer',borderRadius:8,transition:'color 0.2s'}} onClick={()=>setShowUsers(true)} title="Manage users">⚙️</button>}
           <button style={{background:'none',border:'none',color:'#86868b',padding:'6px 8px',fontSize:18,flexShrink:0,cursor:'pointer',borderRadius:8,transition:'color 0.2s'}} onClick={handleLogout} title="Sign out">↗</button>
         </div>
       </div>
@@ -4588,8 +4588,8 @@ function App() {
 
         {/* Section Toggle */}
         <div style={{padding:'8px 20px',display:'flex',gap:0,background:'#f0f0f5',borderRadius:8,margin:'0 16px 8px'}}>
-          <button onClick={()=>{switchSection('fbm');setMobileMenuOpen(false);}} style={{flex:1,padding:'8px 0',borderRadius:6,border:'none',fontSize:13,fontWeight:600,cursor:'pointer',background:activeSection==='fbm'?'#fff':'transparent',color:activeSection==='fbm'?'#1d1d1f':'#86868b',boxShadow:activeSection==='fbm'?'0 1px 3px rgba(0,0,0,0.1)':'none'}}>📦 FBM</button>
-          <button onClick={()=>{switchSection('fba');setMobileMenuOpen(false);}} style={{flex:1,padding:'8px 0',borderRadius:6,border:'none',fontSize:13,fontWeight:600,cursor:'pointer',background:activeSection==='fba'?'#fff':'transparent',color:activeSection==='fba'?'#1d1d1f':'#86868b',boxShadow:activeSection==='fba'?'0 1px 3px rgba(0,0,0,0.1)':'none'}}>🚀 FBA</button>
+          <button onClick={()=>{switchSection('fbm');setMobileMenuOpen(false);}} style={{flex:1,padding:'8px 0',borderRadius:6,border:'none',fontSize:13,fontWeight:600,cursor:'pointer',background:activeSection==='fbm'?'#fff':'transparent',color:activeSection==='fbm'?'#1d1d1f':'#86868b',boxShadow:activeSection==='fbm'?'0 1px 3px rgba(0,0,0,0.1)':'none'}}>FBM</button>
+          <button onClick={()=>{switchSection('fba');setMobileMenuOpen(false);}} style={{flex:1,padding:'8px 0',borderRadius:6,border:'none',fontSize:13,fontWeight:600,cursor:'pointer',background:activeSection==='fba'?'#fff':'transparent',color:activeSection==='fba'?'#1d1d1f':'#86868b',boxShadow:activeSection==='fba'?'0 1px 3px rgba(0,0,0,0.1)':'none'}}>FBA</button>
         </div>
 
         {/* Navigation Items */}
@@ -4597,8 +4597,8 @@ function App() {
           <button key={t.k} className={`mobile-menu-item ${activeTab===t.k?'active':''}`} onClick={()=>{setActiveTab(t.k); setMobileMenuOpen(false);}}>{t.l}</button>
         )}
         <div className="mobile-menu-divider"/>
-        {ri.canManage&&<button className="mobile-menu-item" onClick={()=>{setShowUsers(true); setMobileMenuOpen(false);}}>👥 Manage Users</button>}
-        <button className="mobile-menu-item" style={{color:'#ef4444'}} onClick={()=>{handleLogout(); setMobileMenuOpen(false);}}>🚪 Sign Out</button>
+        {ri.canManage&&<button className="mobile-menu-item" onClick={()=>{setShowUsers(true); setMobileMenuOpen(false);}}>Manage Users</button>}
+        <button className="mobile-menu-item" style={{color:'#ef4444'}} onClick={()=>{handleLogout(); setMobileMenuOpen(false);}}>Sign Out</button>
       </div>
 
       {/* Main content */}
@@ -4617,7 +4617,7 @@ function App() {
         )}
         {orders.length===0&&!activeTab.startsWith('fba-')&&<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',minHeight:'60vh'}}>
           <div style={{textAlign:'center',color:'#86868b'}}>
-            <div style={{fontSize:40,marginBottom:16}}>📦</div>
+            <div style={{fontSize:18,marginBottom:16,fontWeight:600,color:'#0071e3'}}>●</div>
             <div style={{fontSize:17,fontWeight:600,color:'#1d1d1f',marginBottom:8,letterSpacing:'-0.01em'}}>Loading orders…</div>
             <div style={{fontSize:14,color:'#86868b',marginBottom:24}}>Connecting to your data source</div>
             <button 
