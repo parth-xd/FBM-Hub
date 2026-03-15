@@ -297,11 +297,11 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   [role="statsbar"] { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 4px 12px !important; padding: 6px 12px !important; }
   [role="statsbar"] > div { min-width: 0 !important; }
   
-  /* Filter bar - horizontal scroll on mobile, no wrapping */
-  [role="filterbar"] { display: flex !important; flex-wrap: nowrap !important; gap: 6px !important; padding: 6px 12px !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
-  [role="filterbar"] > input, [role="filterbar"] > select { flex: 0 0 auto !important; min-width: 100px !important; width: auto !important; }
-  [role="filterbar"] > button { flex: 0 0 auto !important; white-space: nowrap !important; }
-  [role="filterbar"] > div[style*="flex:1"], [role="filterbar"] > div[style*="flex: 1"] { flex: 0 0 4px !important; min-width: 0 !important; }
+  /* Filter bar - wrap on tablet, stack into 2 rows */
+  [role="filterbar"] { display: flex !important; flex-wrap: wrap !important; gap: 4px !important; padding: 4px 12px !important; }
+  [role="filterbar"] > input, [role="filterbar"] > select { flex: 1 1 calc(50% - 2px) !important; min-width: 0 !important; width: auto !important; font-size: 13px !important; padding: 8px 10px !important; height: 32px !important; }
+  [role="filterbar"] > button { flex: 1 1 calc(50% - 2px) !important; white-space: nowrap !important; font-size: 12px !important; padding: 8px 10px !important; height: 32px !important; }
+  [role="filterbar"] > div[style*="flex:1"], [role="filterbar"] > div[style*="flex: 1"] { display: none !important; }
   
   /* Filter pills - horizontal scroll */
   [role="filterpills"] { display: flex !important; gap: 4px !important; padding: 4px 12px !important; overflow-x: auto !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch !important; }
@@ -320,6 +320,11 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   [role="statsbar"] { grid-template-columns: 1fr 1fr 1fr !important; gap: 2px 8px !important; padding: 4px 12px !important; }
   [role="statsbar"] > div > div:first-child { font-size: 8px !important; }
   [role="statsbar"] > div > div:last-child { font-size: 16px !important; }
+  
+  /* Filter bar - even more compact */
+  [role="filterbar"] { gap: 3px !important; padding: 3px 10px !important; }
+  [role="filterbar"] > input, [role="filterbar"] > select { font-size: 12px !important; padding: 6px 8px !important; height: 30px !important; }
+  [role="filterbar"] > button { font-size: 11px !important; padding: 6px 8px !important; height: 30px !important; }
   
   /* Hide secondary stats on very small screens */
   [role="statsbar"] > div:nth-child(n+7) { display: none !important; }
@@ -348,9 +353,10 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   [role="statsbar"] > div > div:first-child { font-size: 8px !important; }
   [role="statsbar"] > div > div:last-child { font-size: 15px !important; }
   
-  /* Filter bar - keep inline */
-  [role="filterbar"] > input, [role="filterbar"] > select { flex: 0 0 auto !important; min-width: 90px !important; width: auto !important; }
-  [role="filterbar"] > button { flex: 0 0 auto !important; }
+  /* Filter bar - ultra-compact wrapping */
+  [role="filterbar"] { gap: 2px !important; padding: 2px 8px !important; }
+  [role="filterbar"] > input, [role="filterbar"] > select { flex: 1 1 calc(50% - 1px) !important; min-width: 0 !important; font-size: 11px !important; padding: 5px 6px !important; height: 28px !important; }
+  [role="filterbar"] > button { flex: 1 1 calc(50% - 1px) !important; font-size: 10px !important; padding: 5px 6px !important; height: 28px !important; }
   
   [role="selectionbar"] { padding: 6px 8px !important; flex-wrap: wrap !important; }
   [role="selectionbar"] > span { font-size: 11px !important; }
@@ -368,7 +374,10 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   [role="statsbar"] > div > div:first-child { font-size: 7px !important; }
   [role="statsbar"] > div > div:last-child { font-size: 13px !important; }
   
-  [role="filterbar"] { gap: 4px !important; padding: 4px 8px !important; }
+  /* Filter bar - ultra-compact */
+  [role="filterbar"] { gap: 2px !important; padding: 2px 6px !important; }
+  [role="filterbar"] > input, [role="filterbar"] > select { font-size: 10px !important; padding: 4px 4px !important; height: 26px !important; }
+  [role="filterbar"] > button { font-size: 9px !important; padding: 4px 4px !important; height: 26px !important; }
 }
 
 @media (hover: none) and (pointer: coarse) {
