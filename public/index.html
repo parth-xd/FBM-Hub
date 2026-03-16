@@ -942,6 +942,33 @@ function extractASIN(sku) {
   return match ? match[1].toUpperCase() : null;
 }
 
+// Parse marketplace from SKU prefix: STB = Amazon, WTB = Walmart/eBay
+function getMarketplace(sku) {
+  if (!sku) return { name: 'Amazon', emoji: '🅰', color: '#ff9900', bg: 'rgba(255,153,0,0.08)' };
+  const prefix = sku.trim().split(/\s*-\s*/)[0].toUpperCase();
+  if (prefix === 'WTB') return { name: 'Walmart/eBay', emoji: '🛒', color: '#0071dc', bg: 'rgba(0,113,220,0.08)' };
+  return { name: 'Amazon', emoji: '🅰', color: '#ff9900', bg: 'rgba(255,153,0,0.08)' };
+}
+
+// Parse route from SKU: e.g. "UKUS" or "UK-US" → "UK → US"
+function getRoute(sku) {
+  if (!sku) return null;
+  const parts = sku.trim().split(/\s*-\s*/);
+  // Route is typically the 4th segment (index 3)
+  // Handle both "UKUS" and "UK" + "US" (split by dash)
+  for (let i = 3; i < parts.length; i++) {
+    const p = parts[i].toUpperCase();
+    const routeMap = { 'UKUS': 'UK → US', 'UKUK': 'UK → UK', 'UKDE': 'UK → DE', 'UKCA': 'UK → CA', 'UKES': 'UK → ES', 'UKFR': 'UK → FR', 'UKIT': 'UK → IT' };
+    if (routeMap[p]) return routeMap[p];
+    // Handle "UK" followed by country code as next part
+    if (p === 'UK' && parts[i+1]) {
+      const next = parts[i+1].toUpperCase();
+      if (['US','UK','DE','CA','ES','FR','IT'].includes(next)) return `UK → ${next}`;
+    }
+  }
+  return null;
+}
+
 // DHL if: (1) carrier was expedited (is_dhl flag from import), OR
 //          (2) total sell price > 300 AND expected profit > 35
 function isDHLOrder(o) {
@@ -1763,6 +1790,8 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
               {order.multiPO&&<span className="mpo-badge">MULTI-PO</span>}
               {isOverdue&&<span className="tag" style={{background:'#fff5f5',color:'#ff3b30',border:'none',fontWeight:600,fontSize:11}}>Overdue</span>}
               {order.refunded&&<span className="tag" style={{background:'#fff5f5',color:'#ff3b30',border:'none',fontWeight:600,fontSize:11}}>Refunded</span>}
+              {(()=>{const m=getMarketplace(order.sku);return <span className="tag" style={{background:m.bg,color:m.color,border:`1px solid ${m.color}25`,fontWeight:600,fontSize:11}}>{m.emoji} {m.name}</span>;})()}
+              {(()=>{const r=getRoute(order.sku);return r?<span className="tag" style={{background:'rgba(139,92,246,0.08)',color:'#7c3aed',border:'1px solid rgba(139,92,246,0.2)',fontWeight:600,fontSize:11}}>🌍 {r}</span>:null;})()}
             </div>
             <div style={{fontSize:12,fontFamily:'IBM Plex Mono',color:'#86868b',marginBottom:6}}>{order.orderId}</div>
             <div style={{fontSize:17,fontWeight:600,color:'#1d1d1f',lineHeight:1.4,maxWidth:550,marginBottom:8,letterSpacing:'-0.02em'}}>{order.productName||'—'}</div>
@@ -2943,11 +2972,13 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
           {isMPO&&<span style={{fontSize:7,padding:'1px 5px',background:'rgba(96,165,250,0.12)',color:'#3b82f6',border:'1px solid rgba(96,165,250,0.3)',borderRadius:3,fontWeight:700,letterSpacing:'0.02em'}}>MULTI-PO</span>}
           {order.isExceptionPO&&<span style={{fontSize:7,padding:'1px 5px',background:'rgba(96,165,250,0.12)',color:'#3b82f6',border:'1px solid rgba(96,165,250,0.3)',borderRadius:3,fontWeight:700,letterSpacing:'0.02em'}}>EXCEPTION</span>}
           {order.isDHL&&<span className="dhl-badge" style={{fontSize:8,padding:'1px 5px'}}>DHL</span>}
+          {(()=>{const m=getMarketplace(order.sku);return m.name!=='Amazon'?<span style={{fontSize:7,padding:'1px 5px',background:m.bg,color:m.color,border:`1px solid ${m.color}25`,borderRadius:3,fontWeight:700,letterSpacing:'0.02em'}}>{m.emoji} {m.name.toUpperCase()}</span>:null;})()}
+          {(()=>{const r=getRoute(order.sku);return r?<span style={{fontSize:7,padding:'1px 5px',background:'rgba(139,92,246,0.08)',color:'#7c3aed',border:'1px solid rgba(139,92,246,0.2)',borderRadius:3,fontWeight:700,letterSpacing:'0.02em'}}>{r}</span>:null;})()}
         </div>
       </div>;
       case 'product': return <div style={{maxWidth:210}}>
         <div style={{color:'#1d1d1f',fontSize:11,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}} title={order.productName}>{order.productName||'—'}</div>
-        <div style={{color:'#86868b',fontSize:9,fontFamily:'IBM Plex Mono',marginTop:1}}>{order.asin}</div>
+        <div style={{color:'#86868b',fontSize:9,fontFamily:'IBM Plex Mono',marginTop:1}}>{order.asin||'No ASIN'}</div>
       </div>;
       case 'supplier': {
         const sName = order.sellerName || getSupplierName(order.buyLink);
