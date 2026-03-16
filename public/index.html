@@ -1654,6 +1654,8 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
         supplierOrderDate: null,
         supplierOrderRef: null,
         expectedDeliveryDate: null,
+        checkedBy: window.CURRENT_USER?.name || window.CURRENT_USER?.email || 'Unknown',
+        purchasedBy: null,
         status: 'pending_source',
         multiPO: true,
         exceptionReason: exceptionReason,
@@ -1694,6 +1696,8 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             expected_delivery_date: null,
             exception_reason: exceptionReason,
             exception_po_created: true,
+            checked_by: window.CURRENT_USER?.name || window.CURRENT_USER?.email || 'Unknown',
+            purchased_by: null,
             status: 'pending_source',
           }),
         });
@@ -1850,8 +1854,9 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                   onChange={e=>{
                     setEditUnitBuy(e.target.value);
                     const v=e.target.value===''?null:parseFloat(e.target.value);
-                    onUpdate(order.id,{unit_buy_price_inc_vat:v});
+                    onUpdate(order.id,{unitBuyPriceIncVAT:v});
                   }}
+                  onBlur={e=>{const v=e.target.value===''?null:parseFloat(e.target.value);if(v!=null){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({unit_buy_price_inc_vat:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Unit buy price save failed:',err));}}}
                   style={{fontSize:15,fontFamily:'IBM Plex Mono',fontWeight:600,padding:'10px 14px'}}/>
               </div>
               <div>
@@ -1860,8 +1865,9 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                   onChange={e=>{
                     setEditDelivFee(e.target.value);
                     const v=e.target.value===''?null:parseFloat(e.target.value);
-                    onUpdate(order.id,{delivery_fee_per_line:v});
+                    onUpdate(order.id,{deliveryFeePerLine:v});
                   }}
+                  onBlur={e=>{const v=e.target.value===''?null:parseFloat(e.target.value);if(v!=null){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({delivery_fee_per_line:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Delivery fee save failed:',err));}}}
                   style={{fontSize:15,fontFamily:'IBM Plex Mono',fontWeight:600,padding:'10px 14px'}}/>
               </div>
               <div>
@@ -1870,8 +1876,9 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                   onChange={e=>{
                     setEditBQty(e.target.value);
                     const v=e.target.value===''?null:parseInt(e.target.value);
-                    onUpdate(order.id,{b_qty:v});
+                    onUpdate(order.id,{bQty:v});
                   }}
+                  onBlur={e=>{const v=e.target.value===''?null:parseInt(e.target.value);if(v!=null){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({b_qty:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('B-Qty save failed:',err));}}}
                   style={{fontSize:15,fontFamily:'IBM Plex Mono',fontWeight:600,padding:'10px 14px'}}/>
               </div>
               <div>
@@ -1883,6 +1890,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                     const numV=v===''?null:parseFloat(v);
                     onUpdate(order.id,{weight:numV});
                   }}
+                  onBlur={e=>{const v=e.target.value===''?null:parseFloat(e.target.value);if(v!=null){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({weight:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Weight save failed:',err));}}}
                   style={{fontSize:15,fontFamily:'IBM Plex Mono',fontWeight:600,padding:'10px 14px'}}/>
               </div>
             </div>}
@@ -1901,6 +1909,16 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                 <div style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4}}>{k}</div>
                 <div style={{fontSize:15,fontWeight:600,fontFamily:'IBM Plex Mono',color:c,letterSpacing:'-0.02em'}}>{String(v)}</div>
               </div>)}
+              {ri.canEdit&&<div style={{background:'rgba(255,255,255,0.7)',borderRadius:12,padding:'10px 12px',cursor:'pointer'}} onClick={()=>{
+                const current=order.vatStatus||(refData?refData.vat_status:null)||'NO';
+                const newVal=current==='YES'?'NO':'YES';
+                onUpdate(order.id,{vatStatus:newVal});
+                const userEmail=window.CURRENT_USER?.email||'unknown';
+                fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({vat_status:newVal})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('VAT status save failed:',err));
+              }}>
+                <div style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4}}>VAT Status <span style={{fontSize:9,color:'#0071e3'}}>(click to toggle)</span></div>
+                <div style={{fontSize:15,fontWeight:600,fontFamily:'IBM Plex Mono',color:(order.vatStatus||(refData?refData.vat_status:null))==='YES'?'#ff9f0a':'#86868b',letterSpacing:'-0.02em'}}>{order.vatStatus||(refData?refData.vat_status:null)||'—'}</div>
+              </div>}
             </div>
 
             {/* Reference data hint */}
