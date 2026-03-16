@@ -1992,23 +1992,30 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                 ['Expected Delivery',order.expectedDeliveryDate?order.expectedDeliveryDate.slice(0,10):'—'],
                 ['Delivery Time',order.expectedDeliveryTime||'—'],
               ].map(([k,v])=><div key={k} className="kv"><div className="klabel">{k}</div><div className="kval" style={{color:'#86868b',fontSize:12}}>{v}</div></div>)}
-              {/* Checked By — self-select only dropdown */}
+              {/* Checked By — dropdown of importers/owners, self-select only */}
               <div className="kv">
                 <div className="klabel">Checked By</div>
                 {order.checkedBy
                   ? <div className="kval" style={{color:'#34c759',fontSize:12,fontWeight:600}}>{order.checkedBy} ✓</div>
                   : (()=>{
                       const me=window.CURRENT_USER?.name||window.CURRENT_USER?.email||null;
-                      const isSourcer=me&&order.purchasedBy&&me.toLowerCase()===order.purchasedBy.toLowerCase();
+                      const savedAccs=(()=>{try{const s=localStorage.getItem('fbm_accounts');return s?JSON.parse(s):DEFAULT_ACCOUNTS;}catch{return DEFAULT_ACCOUNTS;}})();
+                      const eligible=savedAccs.filter(a=>(a.role==='importer'||a.role==='owner')&&!(order.purchasedBy&&a.name.toLowerCase()===order.purchasedBy.toLowerCase()));
                       if(!me) return <div className="kval" style={{color:'#86868b',fontSize:12}}>—</div>;
-                      if(isSourcer) return <div className="kval" style={{color:'#ff9f0a',fontSize:11}}>You sourced this — someone else must check</div>;
-                      return <button style={{background:'#f0f5ff',border:'1px solid rgba(0,113,227,0.2)',color:'#0071e3',fontSize:12,padding:'4px 12px',fontWeight:600,borderRadius:8,cursor:'pointer',transition:'all 0.2s'}}
-                        onClick={()=>{
-                          if(!confirm(`Mark as checked by ${me}?`)) return;
-                          onUpdate(order.id,{checkedBy:me});
-                          const userEmail=window.CURRENT_USER?.email||'unknown';
-                          fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({checked_by:me})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Checked by save failed:',err));
-                        }}>✓ I've checked this</button>;
+                      return <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                        {eligible.map(a=>{
+                          const isMe=me.toLowerCase()===a.name.toLowerCase();
+                          return <button key={a.id} disabled={!isMe}
+                            style={{background:isMe?'#f0f5ff':'#f5f5f7',border:isMe?'1px solid rgba(0,113,227,0.2)':'1px solid rgba(0,0,0,0.06)',color:isMe?'#0071e3':'#c7c7c7',fontSize:11,padding:'4px 10px',fontWeight:600,borderRadius:8,cursor:isMe?'pointer':'not-allowed',opacity:isMe?1:0.6,transition:'all 0.2s'}}
+                            onClick={()=>{
+                              if(!isMe) return;
+                              if(!confirm(`Mark as checked by ${a.name}?`)) return;
+                              onUpdate(order.id,{checkedBy:a.name});
+                              const userEmail=window.CURRENT_USER?.email||'unknown';
+                              fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({checked_by:a.name})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Checked by save failed:',err));
+                            }}>{isMe?'✓ ':''}{a.name}</button>;
+                        })}
+                      </div>;
                     })()
                 }
               </div>
