@@ -1548,7 +1548,7 @@ function LoginScreen({onLogin}) {
 }
 
 /* ═══ ORDER DETAIL MODAL ═══ */
-function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrders,getCombinedDiscrepancy,orders,liveGbpUsdRate}) {
+function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrders,getCombinedDiscrepancy,orders,liveGbpUsdRate,loadOrders}) {
   if(!order) return null;
   const [showExceptionForm, setShowExceptionForm] = React.useState(false);
   const [exceptionReason, setExceptionReason] = React.useState('');
@@ -1753,11 +1753,11 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
         const data = await res.json();
         console.log('📦 Response data:', data);
         if (res.ok && data?.ok && data.order) {
-          // Update local state with the real DB id
           const realId = data.order.id;
           console.log('✅ Exception PO SAVED to DB! Real id:', realId);
-          setOrders?.(prev => prev.map(o => o.id === tempId ? {...o, id: realId} : o));
           alert('✓ Exception PO saved to database (ID: ' + realId + ')');
+          // Reload from DB to ensure dashboard matches server exactly
+          if (typeof loadOrders === 'function') await loadOrders();
         } else {
           console.error('❌ Exception PO DB save FAILED:', data);
           // Remove the temp order since it wasn't saved
@@ -2079,7 +2079,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
           <div style={{borderTop:'1px solid rgba(0,0,0,0.06)',paddingTop:16,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
             {/* Delete row */}
             {(role==='importer'||role==='owner')&&<button style={{background:'#fff5f5',border:'none',color:'#ff3b30',fontSize:13,padding:'8px 16px',fontWeight:600,borderRadius:20,cursor:'pointer',transition:'all 0.2s'}}
-              onClick={async()=>{if(confirm('Delete this order permanently? This cannot be undone.')){try{if(typeof order.id==='string'&&order.id.startsWith('temp-')){setOrders?.(prev=>prev.filter(o=>o.id!==order.id));onClose();return;}console.log('🗑️ Delete requested for order.id:', order.id, 'type:', typeof order.id, 'orderId:', order.orderId);logChange(order.orderId,'DELETE',order.productName,null,'Order permanently deleted');const userEmail=window.CURRENT_USER?.email||'unknown';const userRole=window.CURRENT_USER?.role||role;const res=await fetch(API.bulkDelete(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail,'x-user-role':userRole},body:JSON.stringify({orderIds:[order.id]})});const data=await res.json();console.log('🗑️ Delete response:', res.status, data);if(res.ok&&data?.ok){if(data.deleted===0){alert('Warning: Order was not found in the database. Removing from view.');console.warn('🗑️ Delete returned 0 rows - order may not exist in DB');}setOrders?.(prev=>prev.filter(o=>o.id!==order.id));onClose();}else{alert('Delete failed: '+(data?.error||'Unknown error'));}}catch(err){console.error('🗑️ Delete error:', err);alert('Delete failed: '+err.message);}}}}
+              onClick={async()=>{if(confirm('Delete this order permanently? This cannot be undone.')){try{if(typeof order.id==='string'&&order.id.startsWith('temp-')){setOrders?.(prev=>prev.filter(o=>o.id!==order.id));onClose();return;}console.log('🗑️ Delete requested for order.id:', order.id, 'type:', typeof order.id, 'orderId:', order.orderId);logChange(order.orderId,'DELETE',order.productName,null,'Order permanently deleted');const userEmail=window.CURRENT_USER?.email||'unknown';const userRole=window.CURRENT_USER?.role||role;const res=await fetch(API.bulkDelete(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail,'x-user-role':userRole},body:JSON.stringify({orderIds:[order.id]})});const data=await res.json();console.log('🗑️ Delete response:', res.status, data);if(res.ok&&data?.ok){if(data.deleted===0){alert('Warning: Order was not found in the database. Removing from view.');console.warn('🗑️ Delete returned 0 rows - order may not exist in DB');}onClose();if(typeof loadOrders==='function')await loadOrders();}else{alert('Delete failed: '+(data?.error||'Unknown error'));}}catch(err){console.error('🗑️ Delete error:', err);alert('Delete failed: '+err.message);}}}}
               title="Permanently delete this order">
               Delete
             </button>}
@@ -3084,7 +3084,7 @@ function UserManageModal({accounts,onSave,onClose}) {
 }
 
 /* ═══ OPERATIONS TABLE ═══ */
-function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombinedDiscrepancy,onImportOrders,onBulkImportCsv,onDeleteOrders,liveGbpUsdRate}) {
+function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombinedDiscrepancy,onImportOrders,onBulkImportCsv,onDeleteOrders,liveGbpUsdRate,loadOrders}) {
   const [filter,setFilter]=useState('all');
   const [search,setSearch]=useState('');
   const [page,setPage]=useState(0);
@@ -3491,7 +3491,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         </div>
       </div>
 
-      {selected&&<OrderModal order={selected} role={role} onClose={()=>setSelected(null)} onUpdate={updateOrder} syncCell={syncCell} onCreateMultiPO={createMultiPO} setOrders={setOrders} getCombinedDiscrepancy={getCombinedDiscrepancy} orders={orders} liveGbpUsdRate={liveGbpUsdRate}/>} 
+      {selected&&<OrderModal order={selected} role={role} onClose={()=>setSelected(null)} onUpdate={updateOrder} syncCell={syncCell} onCreateMultiPO={createMultiPO} setOrders={setOrders} getCombinedDiscrepancy={getCombinedDiscrepancy} orders={orders} liveGbpUsdRate={liveGbpUsdRate} loadOrders={loadOrders}/>} 
 
       {showSingleImport&&<div className="modal-overlay" onClick={()=>setShowSingleImport(false)}>
         <div className="modal-box" style={{width:'min(96vw,760px)'}} onClick={e=>e.stopPropagation()}>
@@ -4893,13 +4893,10 @@ function App() {
     console.log('🗑️ Delete response:', res.status, 'ok:', res.ok, 'data:', data);
     if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`);
     console.log('🗑️ Delete successful, deleted:', data.deleted, 'verified:', data.verified);
-    setOrders(prev => {
-      const filtered = prev.filter(o => !orderIds.includes(o.id));
-      console.log('🗑️ Filtered orders: before=', prev.length, 'after=', filtered.length);
-      return filtered;
-    });
     setWriteToast({ok:true, msg:`✓ Deleted ${data.deleted} order${data.deleted>1?'s':''}`});
     setTimeout(() => setWriteToast(null), 2500);
+    // Reload from DB to ensure dashboard matches server exactly
+    await loadOrders();
   }
 
   async function handleBulkImportCsv(csvContent, fileName, mode='shipstation') {
@@ -5058,7 +5055,7 @@ function App() {
               }}/></div>
               <OwnerDashboard orders={orders}/>
             </>}
-            {activeTab==='operations'&&<OperationsTable orders={orders} setOrders={setOrders} role={role} syncCell={syncCell} createMultiPO={createMultiPO} getCombinedDiscrepancy={getCombinedDiscrepancy} onImportOrders={handleImportOrders} onBulkImportCsv={handleBulkImportCsv} onDeleteOrders={handleDeleteOrders} liveGbpUsdRate={liveGbpUsdRate}/>}            
+            {activeTab==='operations'&&<OperationsTable orders={orders} setOrders={setOrders} role={role} syncCell={syncCell} createMultiPO={createMultiPO} getCombinedDiscrepancy={getCombinedDiscrepancy} onImportOrders={handleImportOrders} onBulkImportCsv={handleBulkImportCsv} onDeleteOrders={handleDeleteOrders} liveGbpUsdRate={liveGbpUsdRate} loadOrders={loadOrders}/>}            
             {activeTab==='ins'&&<INSView orders={orders}/>}
             {activeTab==='audit'&&ri.canSeeAnalytics&&<AuditLogView/>}
             {activeTab==='fba-central'&&<FBACentralCommand currentUser={currentUser} role={role}/>}

@@ -698,9 +698,11 @@ app.post('/api/orders/bulk-delete', async (req, res) => {
 
       console.log(`✅ Bulk delete: Query executed, rowCount=${deleteResult.rowCount}`);
 
-      // Audit log
+      await client.query('COMMIT');
+      
+      // Audit log AFTER commit so it can't abort the delete transaction
       try {
-        await client.query(
+        await pool.query(
           `INSERT INTO audit_logs (user_email, action, field_name, old_value, new_value, changed_at)
            VALUES ($1, $2, $3, $4, $5, NOW())`,
           [userEmail, 'BULK_DELETE', 'orders_deleted', String(validIds.length), 'deleted']
@@ -709,8 +711,6 @@ app.post('/api/orders/bulk-delete', async (req, res) => {
       } catch (auditErr) {
         console.warn(`⚠️  Audit logging skipped: ${auditErr.message}`);
       }
-
-      await client.query('COMMIT');
       
       // Verify deletion
       const verifyResult = await pool.query(
