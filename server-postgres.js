@@ -678,61 +678,41 @@ app.post('/api/orders/bulk-delete', async (req, res) => {
 
     console.log(`🗑️  Bulk delete: Attempting to delete ${validIds.length} orders (ids: ${validIds.join(',')}) by ${userEmail}`);
 
-    // First, check if these orders exist
-    const checkResult = await pool.query(
-      `SELECT id, order_id FROM orders WHERE id = ANY($1::int[])`,
-      [validIds]
+    // Direct delete — no transaction needed for a single statement
+    const placeholders = validIds.map((_, i) => `$${i + 1}`).join(',');
+    const deleteResult = await pool.query(
+      `DELETE FROM orders WHERE id IN (${placeholders})`,
+      validIds.map(Number)
     );
-    console.log(`🔍 Found ${checkResult.rows.length} orders to delete:`, checkResult.rows.map(r => ({ id: r.id, orderId: r.order_id })));
 
-    // Use transaction for atomicity
-    const client = await pool.connect();
+    console.log(`✅ Bulk delete: Query executed, rowCount=${deleteResult.rowCount}`);
+
+    // Audit log (separate, non-critical)
     try {
-      await client.query('BEGIN');
-
-      const placeholders = validIds.map((_, i) => `$${i + 1}`).join(',');
-      const deleteResult = await client.query(
-        `DELETE FROM orders WHERE id IN (${placeholders})`,
-        validIds.map(Number)
+      await pool.query(
+        `INSERT INTO audit_logs (user_email, action, field_name, old_value, new_value, changed_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())`,
+        [userEmail, 'BULK_DELETE', 'orders_deleted', String(validIds.length), 'deleted']
       );
-
-      console.log(`✅ Bulk delete: Query executed, rowCount=${deleteResult.rowCount}`);
-
-      await client.query('COMMIT');
-      
-      // Audit log AFTER commit so it can't abort the delete transaction
-      try {
-        await pool.query(
-          `INSERT INTO audit_logs (user_email, action, field_name, old_value, new_value, changed_at)
-           VALUES ($1, $2, $3, $4, $5, NOW())`,
-          [userEmail, 'BULK_DELETE', 'orders_deleted', String(validIds.length), 'deleted']
-        );
-        console.log(`📝 Audit log recorded for bulk delete`);
-      } catch (auditErr) {
-        console.warn(`⚠️  Audit logging skipped: ${auditErr.message}`);
-      }
-      
-      // Verify deletion
-      const verifyResult = await pool.query(
-        `SELECT COUNT(*) as count FROM orders WHERE id = ANY($1::int[])`,
-        [validIds]
-      );
-      const stillExists = parseInt(verifyResult.rows[0].count) || 0;
-      if (stillExists > 0) {
-        console.warn(`⚠️  WARNING: ${stillExists} orders still exist after delete!`);
-      } else {
-        console.log(`✅ Verified: All ${validIds.length} orders deleted successfully`);
-      }
-      
-      broadcast('orders-deleted', { ids: validIds.map(Number), deletedBy: userEmail });
-
-      res.json({ ok: true, deleted: deleteResult.rowCount, verified: stillExists === 0 });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    } catch (auditErr) {
+      console.warn(`⚠️  Audit logging skipped: ${auditErr.message}`);
     }
+
+    // Verify deletion
+    const verifyResult = await pool.query(
+      `SELECT COUNT(*) as count FROM orders WHERE id = ANY($1::int[])`,
+      [validIds.map(Number)]
+    );
+    const stillExists = parseInt(verifyResult.rows[0].count) || 0;
+    if (stillExists > 0) {
+      console.warn(`⚠️  WARNING: ${stillExists} orders still exist after delete!`);
+    } else {
+      console.log(`✅ Verified: All ${validIds.length} orders deleted successfully`);
+    }
+
+    broadcast('orders-deleted', { ids: validIds.map(Number), deletedBy: userEmail });
+
+    res.json({ ok: true, deleted: deleteResult.rowCount, verified: stillExists === 0, version: 2 });
   } catch (error) {
     console.error(`❌ Bulk delete error: ${error.message}`);
     res.status(500).json({ error: error.message });
