@@ -753,6 +753,8 @@ app.post('/api/orders/:id', async (req, res) => {
     const updates = req.body;
     const userEmail = req.headers['x-user-email'] || 'unknown';
     
+    console.log(`📝 Update request for order ID=${id}, fields:`, Object.keys(updates), 'by:', userEmail);
+    
     if (!updates || Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
     }
@@ -780,6 +782,7 @@ app.post('/api/orders/:id', async (req, res) => {
     // Get current order
     const result = await pool.query('SELECT * FROM orders WHERE id = $1', [id]);
     if (result.rows.length === 0) {
+      console.warn(`⚠️  Order ID=${id} not found!`);
       return res.status(404).json({ error: 'Order not found' });
     }
     
@@ -792,10 +795,12 @@ app.post('/api/orders/:id', async (req, res) => {
     const values = safeKeys.map(k => updates[k]);
     values.push(id);
     
-    const updateResult = await pool.query(
-      `UPDATE orders SET ${setClauses}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`,
-      values
-    );
+    const query = `UPDATE orders SET ${setClauses}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`;
+    console.log(`  SQL: ${query.substring(0, 80)}...`);
+    console.log(`  Values: ${JSON.stringify(values)}`);
+    
+    const updateResult = await pool.query(query, values);
+    console.log(`  ✓ Updated ${updateResult.rowCount} row(s)`);
     
     // Audit log changes (only for whitelisted fields)
     for (const key of safeKeys) {
@@ -814,7 +819,7 @@ app.post('/api/orders/:id', async (req, res) => {
     broadcast('order-updated', { id: parseInt(id), ...updated, updatedBy: userEmail });
     res.json({ ok: true, order: updated });
   } catch (error) {
-    console.error('Update order error:', error);
+    console.error('❌ Update order error:', error);
     res.status(500).json({ error: error.message });
   }
 });
