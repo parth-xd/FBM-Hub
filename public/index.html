@@ -1643,8 +1643,14 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
         buyLink: null,
         poId: order.poId + '-EXC',
         supplier: 'TBD - Sourcing Required',
-        unitBuyPriceIncVAT: null,
-        totalBuyPriceIncVAT: null,
+        unitBuyPriceIncVAT: order.unitBuyPriceIncVAT,
+        totalBuyPriceIncVAT: order.unitBuyPriceIncVAT ? (order.unitBuyPriceIncVAT * qtyToSource) + (order.deliveryFeePerLine || 0) : null,
+        totalBuyPriceExcVAT: order.totalBuyPriceExcVAT ? (order.totalBuyPriceExcVAT / (order.bQty || 1)) * qtyToSource : null,
+        deliveryFeePerLine: order.deliveryFeePerLine || 0,
+        vatStatus: order.vatStatus || 'NO',
+        orderWeight: order.orderWeight ? (order.orderWeight / (order.sQty || 1)) * qtyToSource : null,
+        shippingCostGBP: order.shippingCostGBP ? (order.shippingCostGBP / (order.sQty || 1)) * qtyToSource : null,
+        expectedProfit: displayProfit != null ? displayProfit * (qtyToSource / (order.sQty || 1)) : null,
         status: 'pending_source',
         multiPO: true,
         exceptionReason: exceptionReason,
@@ -1678,6 +1684,14 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             po_id: newMultiPOOrder.poId,
             buy_link: null,
             is_dhl: order.isDHL,
+            unit_buy_price_inc_vat: newMultiPOOrder.unitBuyPriceIncVAT,
+            total_buy_price_inc_vat: newMultiPOOrder.totalBuyPriceIncVAT,
+            total_buy_price_exc_vat: newMultiPOOrder.totalBuyPriceExcVAT,
+            delivery_fee_per_line: newMultiPOOrder.deliveryFeePerLine,
+            vat_status: newMultiPOOrder.vatStatus,
+            order_weight: newMultiPOOrder.orderWeight,
+            shipping_cost_gbp: newMultiPOOrder.shippingCostGBP,
+            expected_profit: newMultiPOOrder.expectedProfit,
             exception_reason: exceptionReason,
             exception_po_created: true,
             status: 'pending_source',
@@ -2001,7 +2015,9 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                   Order ID: <span style={{fontFamily:'monospace'}}>{order.orderId?.slice(-14)}</span><br/>
                   ASIN: <span style={{fontFamily:'monospace'}}>{order.asin}</span><br/>
                   Product: {order.productName}<br/>
-                  Supplied Qty: {order.sQty||'—'} · Received: {order.qtyReceived??'—'} · Gap: <strong>{discrepancy}</strong>
+                  Supplied Qty: {order.sQty||'—'} · Received: {order.qtyReceived??'—'} · Gap: <strong>{discrepancy}</strong><br/>
+                  VAT Status: <strong style={{color:order.vatStatus==='YES'?'#34c759':'#ff9f0a'}}>{order.vatStatus||'Unknown'}</strong><br/>
+                  {displayProfit!=null&&<>Profit: <strong style={{color:displayProfit>=0?'#34c759':'#ff3b30'}}>${displayProfit.toFixed(2)}</strong> · Margin: {displayMargin!=null?`${displayMargin.toFixed(1)}%`:'—'} · {displayProfitable?'✅ Profitable':'❌ Not Profitable'}</>}
                 </div>
               </div>
 
