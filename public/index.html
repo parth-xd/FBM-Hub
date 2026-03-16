@@ -1656,8 +1656,9 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
         exceptionPOCreated: true,
         status: 'refund_requested'
       });
-      syncCell(order.id, 32, exceptionReason);
-      syncCell(order.id, 34, 'TRUE');
+      // Persist to DB directly
+      const userEmail = window.CURRENT_USER?.email || 'unknown';
+      fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({exception_reason:exceptionReason,exception_po_created:true,status:'refund_requested'})}).catch(err=>console.error('Failed to persist refund exception:',err));
       setShowExceptionForm(false);
       setExceptionReason('');
       setPartialQtyToSource('');
@@ -1748,9 +1749,13 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
         if (res.ok && data?.ok && data.order) {
           // Update local state with the real DB id
           setOrders?.(prev => prev.map(o => o.id === newMultiPOOrder.id ? {...o, id: data.order.id} : o));
+        } else {
+          console.error('Exception PO DB save failed:', data);
+          alert('Exception PO created locally but failed to save to database: ' + (data?.error || 'Unknown error'));
         }
       } catch (err) {
-        console.warn('Exception PO saved locally but DB sync failed:', err.message);
+        console.error('Exception PO DB save error:', err);
+        alert('Exception PO created locally but failed to save to database: ' + err.message);
       }
 
       // Also create Multi-PO entry for Issues tab
@@ -1778,8 +1783,9 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
         exceptionPOCreated: true,
         multiPO: true
       });
-      syncCell(order.id, 32, exceptionReason);
-      syncCell(order.id, 34, 'TRUE');
+      // Persist to DB directly
+      {const userEmail = window.CURRENT_USER?.email || 'unknown';
+      fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({exception_reason:exceptionReason,exception_po_created:true,is_multi_po:true})}).catch(err=>console.error('Failed to persist exception on original:',err));}
     }
 
     setShowExceptionForm(false);

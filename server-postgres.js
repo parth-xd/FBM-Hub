@@ -504,7 +504,9 @@ app.post('/api/orders/create', async (req, res) => {
     const {
       order_id, order_date, product_name, total_sell_price, ship_by_date,
       asin, sku, s_qty, b_qty, po_id, buy_link, is_dhl,
-      exception_reason, exception_po_created, status
+      vat_status, order_weight,
+      exception_reason, exception_po_created, status,
+      checked_by, purchased_by
     } = req.body;
 
     if (!order_id) {
@@ -514,12 +516,18 @@ app.post('/api/orders/create', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO orders (order_id, order_date, product_name, total_sell_price, ship_by_date,
         asin, sku, s_qty, b_qty, po_id, buy_link, is_dhl,
-        exception_reason, exception_po_created, status, imported_by, imported_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
+        vat_status, order_weight,
+        exception_reason, exception_po_created, status, 
+        checked_by, purchased_by,
+        imported_by, imported_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW())
        RETURNING *`,
       [order_id, order_date, product_name, total_sell_price, ship_by_date,
        asin, sku, s_qty, b_qty, po_id, buy_link, is_dhl || false,
-       exception_reason, exception_po_created || false, status || 'pending', userEmail]
+       vat_status || null, order_weight || null,
+       exception_reason, exception_po_created || false, status || 'pending',
+       checked_by || null, purchased_by || null,
+       userEmail]
     );
 
     const order = result.rows[0];
