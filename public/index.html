@@ -563,6 +563,7 @@ const API = {
   
   // Admin endpoints
   approveUser: () => `${API.base()}/api/admin/approve-user`,
+  syncAccounts: () => `${API.base()}/api/admin/sync-accounts`,
   auditLogs: () => `${API.base()}/api/audit-logs`,
   
   // Schema - Single source of truth for all columns
@@ -4752,7 +4753,7 @@ function App() {
         FBM Operations Hub
       </div>
 
-      {showUsers&&ri.canManage&&<UserManageModal accounts={accounts} onSave={a=>{setAccounts(a);localStorage.setItem('fbm_accounts',JSON.stringify(a));}} onClose={()=>setShowUsers(false)}/>}
+      {showUsers&&ri.canManage&&<UserManageModal accounts={accounts} onSave={a=>{setAccounts(a);localStorage.setItem('fbm_accounts',JSON.stringify(a));fetch(API.syncAccounts(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':currentUser?.email||'unknown'},body:JSON.stringify({accounts:a})}).catch(err=>console.warn('Account sync failed:',err.message));}} onClose={()=>setShowUsers(false)}/>}
       {showMultiPOModal&&<MultiPOModal order={showMultiPOModal} onClose={()=>setShowMultiPOModal(null)} onCreate={createMultiPO} getCombinedDiscrepancy={getCombinedDiscrepancy}/>}
     </div>
   );

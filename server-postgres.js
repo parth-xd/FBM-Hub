@@ -911,6 +911,47 @@ app.post('/api/admin/approve-user', async (req, res) => {
   }
 });
 
+// Sync team accounts from frontend UserManageModal → DB users table
+app.post('/api/admin/sync-accounts', async (req, res) => {
+  try {
+    const { accounts } = req.body;
+    const requesterEmail = req.headers['x-user-email'] || 'unknown';
+
+    const requesterResult = await pool.query('SELECT role FROM users WHERE email = $1', [requesterEmail]);
+    if (requesterResult.rows[0]?.role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can sync accounts' });
+    }
+
+    if (!Array.isArray(accounts) || accounts.length === 0) {
+      return res.status(400).json({ error: 'accounts array required' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      let synced = 0;
+      for (const acc of accounts) {
+        if (!acc.email || !acc.email.includes('@')) continue;
+        const role = acc.role || 'importer';
+        await client.query(
+          `INSERT INTO users (email, role, approved, created_at)
+           VALUES ($1, $2, true, NOW())
+           ON CONFLICT (email) DO UPDATE SET role = $2, approved = true, updated_at = NOW()`,
+          [acc.email.toLowerCase(), role]
+        );
+        synced++;
+      }
+      await client.query('COMMIT');
+      res.json({ ok: true, synced });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Sync accounts error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ═══ AUDIT LOG ═══
 
 app.get('/api/audit-logs', async (req, res) => {
