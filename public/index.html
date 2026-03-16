@@ -1652,14 +1652,21 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
     // Case 1: Full Refund (no new order row needed)
     if (refundReasons.includes(exceptionReason)) {
       logChange(order.orderId,'exceptionPO',null,'refund_requested',`Exception PO (Refund): ${exceptionReason}`);
-      onUpdate(order.id, {
-        exceptionReason: exceptionReason,
-        exceptionPOCreated: true,
-        status: 'refund_requested'
-      });
-      // Persist to DB directly
+      // Persist to DB first, then update UI
       const userEmail = window.CURRENT_USER?.email || 'unknown';
-      fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({exception_reason:exceptionReason,exception_po_created:true,status:'refund_requested'})}).catch(err=>console.error('Failed to persist refund exception:',err));
+      try {
+        const res = await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({exception_reason:exceptionReason,exception_po_created:true,status:'refund_requested'})});
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        onUpdate(order.id, {
+          exceptionReason: exceptionReason,
+          exceptionPOCreated: true,
+          status: 'refund_requested'
+        });
+      } catch(err) {
+        console.error('Failed to persist refund exception:', err);
+        alert('Failed to save refund exception: ' + err.message);
+        if (typeof loadOrders === 'function') await loadOrders();
+      }
       setShowExceptionForm(false);
       setExceptionReason('');
       setPartialQtyToSource('');
@@ -1790,16 +1797,21 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
 
       onCreateMultiPO?.(exceptionMultiPO);
 
-      // Mark original order as having exception PO
+      // Mark original order as having exception PO — persist first
       logChange(order.orderId,'exceptionPO',null,'source_new',`Exception PO (Source ${qtyToSource} qty): ${exceptionReason}`);
-      onUpdate(order.id, {
-        exceptionReason: exceptionReason,
-        exceptionPOCreated: true,
-        multiPO: true
-      });
-      // Persist to DB directly
       {const userEmail = window.CURRENT_USER?.email || 'unknown';
-      fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({exception_reason:exceptionReason,exception_po_created:true,is_multi_po:true})}).catch(err=>console.error('Failed to persist exception on original:',err));}
+      try {
+        const res = await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({exception_reason:exceptionReason,exception_po_created:true,is_multi_po:true})});
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        onUpdate(order.id, {
+          exceptionReason: exceptionReason,
+          exceptionPOCreated: true,
+          multiPO: true
+        });
+      } catch(err) {
+        console.error('Failed to persist exception on original:', err);
+        alert('Failed to mark original order as exception: ' + err.message);
+      }}
     }
 
     setShowExceptionForm(false);
@@ -1978,13 +1990,12 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                 <div style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4}}>{k}</div>
                 <div style={{fontSize:15,fontWeight:600,fontFamily:'IBM Plex Mono',color:c,letterSpacing:'-0.02em'}}>{String(v)}</div>
               </div>)}
-              {ri.canEdit&&<div style={{background:'rgba(255,255,255,0.7)',borderRadius:12,padding:'10px 12px',cursor:'pointer'}} onClick={()=>{
+              {ri.canEdit&&<div style={{background:'rgba(255,255,255,0.7)',borderRadius:12,padding:'10px 12px',cursor:'pointer'}} onClick={async()=>{
                 const current=order.vatStatus||(refData?refData.vat_status:null)||'NO';
                 const newVal=current==='YES'?'NO':'YES';
                 logChange(order.orderId,'vatStatus',current,newVal);
-                onUpdate(order.id,{vatStatus:newVal});
                 const userEmail=window.CURRENT_USER?.email||'unknown';
-                fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({vat_status:newVal})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('VAT status save failed:',err));
+                try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({vat_status:newVal})});if(!r.ok)throw new Error(`HTTP ${r.status}`);onUpdate(order.id,{vatStatus:newVal});}catch(err){console.error('VAT status save failed:',err);alert('VAT save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}
               }}>
                 <div style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4}}>VAT Status <span style={{fontSize:9,color:'#0071e3'}}>(click to toggle)</span></div>
                 <div style={{fontSize:15,fontWeight:600,fontFamily:'IBM Plex Mono',color:(order.vatStatus||(refData?refData.vat_status:null))==='YES'?'#ff9f0a':'#86868b',letterSpacing:'-0.02em'}}>{order.vatStatus||(refData?refData.vat_status:null)||'—'}</div>
@@ -2048,13 +2059,12 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                           const isMe=me.toLowerCase()===a.name.toLowerCase();
                           return <button key={a.id} disabled={!isMe}
                             style={{background:isMe?'#f0f5ff':'#f5f5f7',border:isMe?'1px solid rgba(0,113,227,0.2)':'1px solid rgba(0,0,0,0.06)',color:isMe?'#0071e3':'#c7c7c7',fontSize:11,padding:'4px 10px',fontWeight:600,borderRadius:8,cursor:isMe?'pointer':'not-allowed',opacity:isMe?1:0.6,transition:'all 0.2s'}}
-                            onClick={()=>{
+                            onClick={async()=>{
                               if(!isMe) return;
                               if(!confirm(`Mark as checked by ${a.name}?`)) return;
                               logChange(order.orderId,'checkedBy',order.checkedBy,a.name);
-                              onUpdate(order.id,{checkedBy:a.name});
                               const userEmail=window.CURRENT_USER?.email||'unknown';
-                              fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({checked_by:a.name})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Checked by save failed:',err));
+                              try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({checked_by:a.name})});if(!r.ok)throw new Error(`HTTP ${r.status}`);onUpdate(order.id,{checkedBy:a.name});}catch(err){console.error('Checked by save failed:',err);alert('Save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}
                             }}>{isMe?'✓ ':''}{a.name}</button>;
                         })}
                       </div>;
@@ -2095,12 +2105,12 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             </button>}
             {/* Lock */}
             {ri.canLock&&<button style={{background:order.beingEdited?'#f0fdf4':'#f5f5f7',border:'none',color:order.beingEdited?'#34c759':'#86868b',fontSize:13,padding:'8px 16px',fontWeight:600,borderRadius:20,cursor:'pointer',transition:'all 0.2s'}}
-              onClick={()=>{const lockUrl=order.beingEdited?API.unlockOrder(order.id):API.lockOrder(order.id);const userEmail=window.CURRENT_USER?.email||'unknown';logChange(order.orderId,'beingEdited',order.beingEdited,!order.beingEdited,order.beingEdited?'Unlocked':'Locked for importing');fetch(lockUrl,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({userEmail})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).then(data=>{onUpdate(order.id,{beingEdited:!!data?.order?.locked_by});}).catch(err=>{console.error('Lock/unlock failed:',err);alert('Lock/unlock failed: '+err.message);});}}>
+              onClick={async()=>{const lockUrl=order.beingEdited?API.unlockOrder(order.id):API.lockOrder(order.id);const userEmail=window.CURRENT_USER?.email||'unknown';logChange(order.orderId,'beingEdited',order.beingEdited,!order.beingEdited,order.beingEdited?'Unlocked':'Locked for importing');try{const r=await fetch(lockUrl,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({userEmail})});if(!r.ok)throw new Error(`HTTP ${r.status}`);const data=await r.json();onUpdate(order.id,{beingEdited:!!data?.order?.locked_by});}catch(err){console.error('Lock/unlock failed:',err);alert('Lock/unlock failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}}}>
               {order.beingEdited?'🔒 Locked — Release':'✏ Mark Importing'}
             </button>}
             {/* Label printed */}
             <button disabled={order.qtyReceived===null || order.qtyReceived===undefined || order.qtyReceived===''} style={{background:order.labelPrinted?'#f0fdf4':'#f5f5f7',border:'none',color:order.labelPrinted?'#34c759':'#86868b',fontSize:13,padding:'8px 16px',fontWeight:600,borderRadius:20,cursor:(order.qtyReceived===null||order.qtyReceived===undefined||order.qtyReceived==='')?'not-allowed':'pointer',opacity:(order.qtyReceived===null||order.qtyReceived===undefined||order.qtyReceived==='')?0.4:1,transition:'all 0.2s'}}
-              onClick={()=>{const v=!order.labelPrinted;onUpdate(order.id,{labelPrinted:v,lockedGbpUsdRate:v?parseFloat(gbpUsdRate):null});syncCell(order.id,31,v?'TRUE':'FALSE');logChange(order.orderId,'labelPrinted',!v,v,`Qty: ${order.qtyReceived}/${order.bQty}`);if(v){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:parseFloat(gbpUsdRate)})}).catch(err=>console.error('Rate lock failed:',err));}else{const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:null})}).catch(err=>console.error('Rate unlock failed:',err));}}}
+              onClick={async()=>{const v=!order.labelPrinted;const userEmail=window.CURRENT_USER?.email||'unknown';const body={label_printed:v,locked_gbp_usd_rate:v?parseFloat(gbpUsdRate):null};try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify(body)});if(!r.ok)throw new Error(`HTTP ${r.status}`);onUpdate(order.id,{labelPrinted:v,lockedGbpUsdRate:v?parseFloat(gbpUsdRate):null});logChange(order.orderId,'labelPrinted',!v,v,`Qty: ${order.qtyReceived}/${order.bQty}`);}catch(err){console.error('Label save failed:',err);alert('Label save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}}}
             >
               {order.labelPrinted?'✓ Label Printed':'Mark Label Printed'}{(order.qtyReceived===null||order.qtyReceived===undefined||order.qtyReceived==='')?` (enter Qty first)`:''}
             </button>
@@ -2109,7 +2119,8 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
               <span style={{color:'#86868b',fontSize:13}}>Qty Rcvd:</span>
               <input type="number" min="0" value={order.qtyReceived??''}
                 style={{width:54,background:'#f5f5f7',border:'none',borderRadius:8,color:'#1d1d1f',padding:'7px',fontSize:14,fontFamily:'IBM Plex Mono',textAlign:'center'}}
-                onChange={e=>{const v=e.target.value===''?null:Number(e.target.value);const d=order.bQty!=null&&v!=null?Number(order.bQty)-v:null;logChange(order.orderId,'qtyReceived',order.qtyReceived,v,`B-Qty: ${order.bQty}, Discrepancy: ${d}`);onUpdate(order.id,{qtyReceived:v,discrepancy:d});if(v!==null)syncCell(order.id,28,v);}}
+                onChange={e=>{const v=e.target.value===''?null:Number(e.target.value);const d=order.bQty!=null&&v!=null?Number(order.bQty)-v:null;onUpdate(order.id,{qtyReceived:v,discrepancy:d});}}
+                onBlur={async e=>{const v=e.target.value===''?null:Number(e.target.value);if(v!==null){const d=order.bQty!=null?Number(order.bQty)-v:null;logChange(order.orderId,'qtyReceived',order.qtyReceived,v,`B-Qty: ${order.bQty}, Discrepancy: ${d}`);const userEmail=window.CURRENT_USER?.email||'unknown';try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({qty_received:v,discrepancy:d})});if(!r.ok)throw new Error(`HTTP ${r.status}`);}catch(err){console.error('Qty save failed:',err);alert('Qty save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}}}}
               />
               <span style={{color:'#86868b',fontSize:13}}>of {order.bQty??'?'}</span>
             </div>
@@ -2254,11 +2265,9 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                   </div>
                   <div style={{display:'flex',gap:10}}>
                     <button style={{flex:1,background:'rgba(34,197,94,0.18)',border:'1px solid rgba(34,197,94,0.3)',color:'#22c55e',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:700,cursor:'pointer'}}
-                      onClick={()=>{
-                        onUpdate(order.id,{labelPrinted:true,lockedGbpUsdRate:parseFloat(gbpUsdRate)});
-                        syncCell(order.id,31,'TRUE');
+                      onClick={async()=>{
                         const userEmail=window.CURRENT_USER?.email||'unknown';
-                        fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:parseFloat(gbpUsdRate)})}).catch(err=>console.error('Rate lock failed:',err));
+                        try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({label_printed:true,locked_gbp_usd_rate:parseFloat(gbpUsdRate)})});if(!r.ok)throw new Error(`HTTP ${r.status}`);onUpdate(order.id,{labelPrinted:true,lockedGbpUsdRate:parseFloat(gbpUsdRate)});}catch(err){console.error('Mark shipped failed:',err);alert('Save failed: '+err.message);}
                         setShowFulfillmentForm(false);
                         setLabelData(null);
                         setFulfillmentError('');
@@ -3288,11 +3297,11 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         onBlur={e=>{const v=e.target.value===''?null:Number(e.target.value);if(v!==null){logChange(order.orderId,'qtyReceived',order.qtyReceived,v,'From table view');const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({qty_received:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('QtyRcvd update failed:',err));}}}
         style={{width:50,background:'#f5f5f7',border:'1px solid #d2d2d7',borderRadius:5,color:order.qtyReceived!=null&&order.bQty!=null&&Number(order.qtyReceived)!==Number(order.bQty)?'#ef4444':'#22c55e',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}}/>;
       case 'disc': return <span style={{fontFamily:'IBM Plex Mono',color:order.discrepancy!=null&&Number(order.discrepancy)!==0?'#ef4444':'#86868b',fontWeight:order.discrepancy!=null&&Number(order.discrepancy)!==0?800:400,fontSize:11}}>{order.discrepancy!=null&&Number(order.discrepancy)!==0?Number(order.discrepancy):'—'}</span>;
-      case 'label': return <button onClick={e=>{e.stopPropagation();const v=!order.labelPrinted;updateOrder(order.id,{labelPrinted:v,lockedGbpUsdRate:v?liveGbpUsdRate:null});syncCell(order.id,31,v?'TRUE':'FALSE');logChange(order.orderId,'labelPrinted',!v,v,'From table view');if(v){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:liveGbpUsdRate})}).catch(err=>console.error('Rate lock failed:',err));}else{const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:null})}).catch(err=>console.error('Rate unlock failed:',err));}}}
+      case 'label': return <button onClick={async e=>{e.stopPropagation();const v=!order.labelPrinted;const userEmail=window.CURRENT_USER?.email||'unknown';const body={label_printed:v,locked_gbp_usd_rate:v?liveGbpUsdRate:null};try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify(body)});if(!r.ok)throw new Error(`HTTP ${r.status}`);updateOrder(order.id,{labelPrinted:v,lockedGbpUsdRate:v?liveGbpUsdRate:null});logChange(order.orderId,'labelPrinted',!v,v,'From table view');}catch(err){console.error('Label save failed:',err);alert('Label save failed: '+err.message);}}}
         style={{background:order.labelPrinted?'rgba(34,197,94,0.18)':'#f5f5f7',border:`1px solid ${order.labelPrinted?'#22c55e40':'#d2d2d7'}`,color:order.labelPrinted?'#22c55e':'#6e6e73',borderRadius:6,padding:'3px 9px',cursor:'pointer',fontSize:13,fontWeight:700}}>
         {order.labelPrinted?'✓':'○'}
       </button>
-      case 'lock': return ri.canLock?<button onClick={e=>{e.stopPropagation();logChange(order.orderId,'beingEdited',order.beingEdited,!order.beingEdited,order.beingEdited?'Unlocked from table':'Locked from table');const lockUrl=order.beingEdited?API.unlockOrder(order.id):API.lockOrder(order.id);const userEmail=window.CURRENT_USER?.email||'unknown';fetch(lockUrl,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({userEmail})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).then(data=>{updateOrder(order.id,{beingEdited:!!data?.order?.locked_by});}).catch(err=>console.error('Lock/unlock failed:',err));}}
+      case 'lock': return ri.canLock?<button onClick={async e=>{e.stopPropagation();const lockUrl=order.beingEdited?API.unlockOrder(order.id):API.lockOrder(order.id);const userEmail=window.CURRENT_USER?.email||'unknown';try{const r=await fetch(lockUrl,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({userEmail})});if(!r.ok)throw new Error(`HTTP ${r.status}`);const data=await r.json();updateOrder(order.id,{beingEdited:!!data?.order?.locked_by});logChange(order.orderId,'beingEdited',order.beingEdited,!order.beingEdited,order.beingEdited?'Unlocked from table':'Locked from table');}catch(err){console.error('Lock/unlock failed:',err);alert('Lock/unlock failed: '+err.message);}}}
         style={{background:order.beingEdited?'rgba(16,185,129,0.18)':'#f5f5f7',border:`1px solid ${order.beingEdited?'#10b98140':'#d2d2d7'}`,color:order.beingEdited?'#10b981':'#6e6e73',borderRadius:6,padding:'3px 8px',cursor:'pointer',fontSize:11,fontWeight:700}}>
         {order.beingEdited?'🔒':'✏'}
       </button>:<span style={{color:'#c7c7cc',fontSize:10}}>—</span>;
@@ -4716,15 +4725,22 @@ function App() {
         console.log('📨 WebSocket message:', message.type);
         
         if (message.type === 'order-updated') {
-          // Real-time update from another user
+          // Real-time update from another user — server sends full order row
           const { id, updatedBy, ...newData } = message.data;
-          console.log(`🔄 Real-time update from ${updatedBy}:`, newData);
+          console.log(`🔄 Real-time update from ${updatedBy}:`, Object.keys(newData).length, 'fields');
           
           setOrders(prev => prev.map(order => {
             if (order.id !== id) return order;
+            // If server sent full row (has order_id), remap entirely
+            if (newData.order_id) {
+              const remapped = mapDbOrderToFrontend(newData);
+              remapped.id = id;
+              remapped.colorStatus = calculateColorStatus(remapped);
+              return remapped;
+            }
+            // Fallback: partial update with known fields
             const updated = {
               ...order,
-              // Map snake_case DB fields to camelCase frontend fields
               weight: newData.weight ?? order.weight,
               status: newData.status ?? order.status,
               labelPrinted: newData.label_printed !== undefined ? newData.label_printed : order.labelPrinted,

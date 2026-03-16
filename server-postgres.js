@@ -612,7 +612,7 @@ app.post('/api/orders/update-cell', async (req, res) => {
       'purchased_by','checked_by','is_dhl','is_multi_po','locked_by',
       'total_buy_price_inc_vat','total_buy_price_exc_vat','shipping_cost_gbp',
       'expected_profit','unit_buy_price_inc_vat','delivery_fee_per_line',
-      'vat_status','suggested_weight','shipstation_link','refunded','refund_date',
+      'vat_status','suggested_weight','order_weight','shipstation_link','refunded','refund_date',
       'expected_delivery_date','supplier_order_date','supplier_order_ref',
       'expected_delivery_time','marked_dispatched_on','locked_gbp_usd_rate'
     ];
@@ -626,8 +626,8 @@ app.post('/api/orders/update-cell', async (req, res) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     const oldValue = order[col];
-    await pool.query(
-      `UPDATE orders SET "${col}" = $1, updated_at = NOW() WHERE id = $2`,
+    const updateResult = await pool.query(
+      `UPDATE orders SET "${col}" = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
       [value, orderId]
     );
 
@@ -642,8 +642,9 @@ app.post('/api/orders/update-cell', async (req, res) => {
       console.warn('Audit logging failed:', auditErr.message);
     }
 
-    broadcast('order-updated', { orderId, col, value, updatedBy: userEmail });
-    res.json({ ok: true });
+    const updated = updateResult.rows[0];
+    broadcast('order-updated', { id: orderId, ...updated, updatedBy: userEmail });
+    res.json({ ok: true, order: updated });
   } catch (error) {
     console.error('Update cell error:', error);
     res.status(500).json({ error: error.message });
@@ -766,7 +767,7 @@ app.post('/api/orders/:id', async (req, res) => {
       'purchased_by','checked_by','is_dhl','is_multi_po','locked_by',
       'total_buy_price_inc_vat','total_buy_price_exc_vat','shipping_cost_gbp',
       'expected_profit','unit_buy_price_inc_vat','delivery_fee_per_line',
-      'vat_status','suggested_weight','shipstation_link','refunded','refund_date',
+      'vat_status','suggested_weight','order_weight','shipstation_link','refunded','refund_date',
       'expected_delivery_date','supplier_order_date','supplier_order_ref',
       'expected_delivery_time','marked_dispatched_on','locked_gbp_usd_rate'
     ];
@@ -791,8 +792,8 @@ app.post('/api/orders/:id', async (req, res) => {
     const values = safeKeys.map(k => updates[k]);
     values.push(id);
     
-    await pool.query(
-      `UPDATE orders SET ${setClauses}, updated_at = NOW() WHERE id = $${values.length}`,
+    const updateResult = await pool.query(
+      `UPDATE orders SET ${setClauses}, updated_at = NOW() WHERE id = $${values.length} RETURNING *`,
       values
     );
     
@@ -809,8 +810,9 @@ app.post('/api/orders/:id', async (req, res) => {
       }
     }
     
-    broadcast('order-updated', { id: parseInt(id), ...updates, updatedBy: userEmail });
-    res.json({ ok: true });
+    const updated = updateResult.rows[0];
+    broadcast('order-updated', { id: parseInt(id), ...updated, updatedBy: userEmail });
+    res.json({ ok: true, order: updated });
   } catch (error) {
     console.error('Update order error:', error);
     res.status(500).json({ error: error.message });
@@ -831,6 +833,7 @@ app.post('/api/orders/:id/lock', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
     
+    broadcast('order-locked', { id: parseInt(id), locked_by: userEmail });
     res.json({ ok: true, order: result.rows[0] });
   } catch (error) {
     console.error('Lock order error:', error);
@@ -851,6 +854,7 @@ app.post('/api/orders/:id/unlock', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
     
+    broadcast('order-unlocked', { id: parseInt(id), locked_by: null });
     res.json({ ok: true, order: result.rows[0] });
   } catch (error) {
     console.error('Unlock order error:', error);
