@@ -258,7 +258,7 @@ const initializeDatabase = async () => {
         id SERIAL PRIMARY KEY,
         user_email VARCHAR(255) NOT NULL,
         user_name VARCHAR(255),
-        current_role VARCHAR(50) NOT NULL,
+        "current_role" VARCHAR(50) NOT NULL,
         requested_role VARCHAR(50) NOT NULL,
         status VARCHAR(20) DEFAULT 'pending',
         decided_by VARCHAR(255),
@@ -1086,7 +1086,7 @@ app.post('/api/role-requests', async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO role_requests (user_email, user_name, current_role, requested_role)
+      `INSERT INTO role_requests (user_email, user_name, "current_role", requested_role)
        VALUES ($1, $2, $3, $4) RETURNING *`,
       [userEmail, userName, currentRole, requested_role]
     );
