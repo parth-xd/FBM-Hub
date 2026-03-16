@@ -4584,6 +4584,7 @@ function App() {
 
   async function loadOrders() {
     setSyncStatus('syncing');
+    setOrders([]); // Clear immediately - start fresh from DB only
     console.log('📥 Loading orders from SQL database...');
     
     try {
@@ -4641,15 +4642,6 @@ function App() {
       setSyncStatus('synced');
       setLastSync(new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}));
       setSyncError(null);
-      
-      // Clean up any lingering temp-ID or exception PO orders that failed to save
-      const dbOrderIds = new Set(parsed.map(o => o.id));
-      const hasGhostOrders = parsed.some(o => typeof o.id === 'string' && o.id.startsWith('temp-')) || 
-                              parsed.some(o => o.productName?.includes('Exception PO'));
-      if (hasGhostOrders) {
-        console.log('⚠️ Found ghost orders in loaded data, removing them');
-        setOrders(prev => prev.filter(o => !(typeof o.id === 'string' && o.id.startsWith('temp-'))));
-      }
     } catch (err) {
       console.error('❌ Load orders error:', err.message);
       setSyncStatus('error');
