@@ -198,13 +198,59 @@ const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_fba_sku ON fba_products(sku);
     `);
 
-    // Add locked_gbp_usd_rate column if it doesn't exist
-    await pool.query(`
-      DO $$ BEGIN
-        ALTER TABLE orders ADD COLUMN IF NOT EXISTS locked_gbp_usd_rate NUMERIC(10,6);
-      EXCEPTION WHEN duplicate_column THEN NULL;
-      END $$;
-    `);
+    // ═══ ADD ALL MISSING COLUMNS TO EXISTING orders TABLE ═══
+    // CREATE TABLE IF NOT EXISTS won't add columns to an existing table,
+    // so we must explicitly add every column the app uses.
+    const missingColumns = [
+      ['weight', 'NUMERIC(10,2)'],
+      ['label_printed', 'BOOLEAN DEFAULT FALSE'],
+      ['s_qty', 'INTEGER'],
+      ['b_qty', 'INTEGER'],
+      ['qty_received', 'INTEGER'],
+      ['discrepancy', 'INTEGER'],
+      ['exception_reason', 'TEXT'],
+      ['exception_stock_solution', 'TEXT'],
+      ['exception_po_created', 'BOOLEAN DEFAULT FALSE'],
+      ['goods_not_available', 'BOOLEAN DEFAULT FALSE'],
+      ['purchased_by', 'VARCHAR(255)'],
+      ['checked_by', 'VARCHAR(255)'],
+      ['is_dhl', 'BOOLEAN DEFAULT FALSE'],
+      ['is_multi_po', 'BOOLEAN DEFAULT FALSE'],
+      ['locked_by', 'VARCHAR(255)'],
+      ['total_buy_price_inc_vat', 'NUMERIC(10,2)'],
+      ['total_buy_price_exc_vat', 'NUMERIC(10,2)'],
+      ['shipping_cost_gbp', 'NUMERIC(10,2)'],
+      ['expected_profit', 'NUMERIC(10,2)'],
+      ['unit_buy_price_inc_vat', 'NUMERIC(10,2)'],
+      ['delivery_fee_per_line', 'NUMERIC(10,2)'],
+      ['vat_status', 'VARCHAR(20)'],
+      ['suggested_weight', 'NUMERIC(10,2)'],
+      ['order_weight', 'NUMERIC(10,2)'],
+      ['shipstation_link', 'TEXT'],
+      ['refunded', 'BOOLEAN DEFAULT FALSE'],
+      ['refund_date', 'DATE'],
+      ['expected_delivery_date', 'DATE'],
+      ['supplier_order_date', 'DATE'],
+      ['supplier_order_ref', 'VARCHAR(255)'],
+      ['expected_delivery_time', 'VARCHAR(100)'],
+      ['marked_dispatched_on', 'DATE'],
+      ['locked_gbp_usd_rate', 'NUMERIC(10,6)'],
+      ['imported_by', 'VARCHAR(255)'],
+      ['imported_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'],
+      ['updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'],
+    ];
+
+    for (const [col, type] of missingColumns) {
+      try {
+        await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS "${col}" ${type}`);
+      } catch (e) {
+        // Column already exists or other non-critical error
+        if (!e.message.includes('already exists')) {
+          console.warn(`⚠️ Could not add column ${col}: ${e.message}`);
+        }
+      }
+    }
+    console.log('✅ All order columns verified');
 
     // Create role_requests table
     await pool.query(`
