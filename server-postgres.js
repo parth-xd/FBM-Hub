@@ -627,7 +627,14 @@ app.post('/api/orders/bulk-delete', async (req, res) => {
       return res.status(400).json({ error: 'No valid order IDs provided' });
     }
 
-    console.log(`🗑️  Bulk delete: Attempting to delete ${validIds.length} orders by ${userEmail}`);
+    console.log(`🗑️  Bulk delete: Attempting to delete ${validIds.length} orders (ids: ${validIds.join(',')}) by ${userEmail}`);
+
+    // First, check if these orders exist
+    const checkResult = await pool.query(
+      `SELECT id, order_id FROM orders WHERE id = ANY($1::int[])`,
+      [validIds]
+    );
+    console.log(`🔍 Found ${checkResult.rows.length} orders to delete:`, checkResult.rows.map(r => ({ id: r.id, orderId: r.order_id })));
 
     // Use transaction for atomicity
     const client = await pool.connect();
@@ -640,7 +647,7 @@ app.post('/api/orders/bulk-delete', async (req, res) => {
         validIds.map(Number)
       );
 
-      console.log(`✅ Bulk delete: Successfully deleted ${deleteResult.rowCount} orders`);
+      console.log(`✅ Bulk delete: Query executed, rowCount=${deleteResult.rowCount}`);
 
       // Audit log
       try {
@@ -655,9 +662,22 @@ app.post('/api/orders/bulk-delete', async (req, res) => {
       }
 
       await client.query('COMMIT');
+      
+      // Verify deletion
+      const verifyResult = await pool.query(
+        `SELECT COUNT(*) as count FROM orders WHERE id = ANY($1::int[])`,
+        [validIds]
+      );
+      const stillExists = parseInt(verifyResult.rows[0].count) || 0;
+      if (stillExists > 0) {
+        console.warn(`⚠️  WARNING: ${stillExists} orders still exist after delete!`);
+      } else {
+        console.log(`✅ Verified: All ${validIds.length} orders deleted successfully`);
+      }
+      
       broadcast('orders-deleted', { ids: validIds.map(Number), deletedBy: userEmail });
 
-      res.json({ ok: true, deleted: deleteResult.rowCount });
+      res.json({ ok: true, deleted: deleteResult.rowCount, verified: stillExists === 0 });
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

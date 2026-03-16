@@ -2066,7 +2066,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
           <div style={{borderTop:'1px solid rgba(0,0,0,0.06)',paddingTop:16,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
             {/* Delete row */}
             {(role==='importer'||role==='owner')&&<button style={{background:'#fff5f5',border:'none',color:'#ff3b30',fontSize:13,padding:'8px 16px',fontWeight:600,borderRadius:20,cursor:'pointer',transition:'all 0.2s'}}
-              onClick={async()=>{if(confirm('Delete this order permanently? This cannot be undone.')){try{console.log('🗑️ Delete requested for order id:', order.id, 'orderId:', order.orderId);logChange(order.orderId,'DELETE',order.productName,null,'Order permanently deleted');const userEmail=window.CURRENT_USER?.email||'unknown';const userRole=window.CURRENT_USER?.role||role;console.log('🗑️ Sending delete to server with role:', userRole);const res=await fetch(API.bulkDelete(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail,'x-user-role':userRole},body:JSON.stringify({orderIds:[order.id]})});const data=await res.json();console.log('🗑️ Delete response:', res.status, data);if(res.ok&&data?.ok){if(data.deleted===0){alert('Warning: Order was not found in the database (may have been a local-only order). Removing from view.');console.warn('🗑️ Delete returned 0 rows - order may not exist in DB');}setOrders?.(prev=>prev.filter(o=>o.id!==order.id));onClose();}else{alert('Delete failed: '+(data?.error||'Unknown error'));}}catch(err){console.error('🗑️ Delete error:', err);alert('Delete failed: '+err.message);}}}}
+              onClick={async()=>{if(confirm('Delete this order permanently? This cannot be undone.')){try{console.log('🗑️ Delete requested for order.id:', order.id, 'type:', typeof order.id, 'orderId:', order.orderId);logChange(order.orderId,'DELETE',order.productName,null,'Order permanently deleted');const userEmail=window.CURRENT_USER?.email||'unknown';const userRole=window.CURRENT_USER?.role||role;console.log('🗑️ Sending delete to server with role:', userRole, 'sending orderIds:', [order.id]);const res=await fetch(API.bulkDelete(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail,'x-user-role':userRole},body:JSON.stringify({orderIds:[order.id]})});const data=await res.json();console.log('🗑️ Delete response status:', res.status, 'ok:', res.ok, 'data:', data);if(res.ok&&data?.ok){console.log('🗑️ Delete successful, deleted:', data.deleted, 'verified:', data.verified);if(data.deleted===0){alert('Warning: Order was not found in the database (may have been a local-only order). Removing from view.');console.warn('🗑️ Delete returned 0 rows - order may not exist in DB');}setOrders?.(prev=>{const filtered=prev.filter(o=>o.id!==order.id);console.log('🗑️ Filtered orders: before=', prev.length, 'after=', filtered.length);return filtered;});onClose();}else{alert('Delete failed: '+(data?.error||'Unknown error'));}}}catch(err){console.error('🗑️ Delete error:', err);alert('Delete failed: '+err.message);}}}}
               title="Permanently delete this order">
               Delete
             </button>}
@@ -4851,7 +4851,7 @@ function App() {
   async function handleDeleteOrders(orderIds) {
     const userEmail = currentUser?.email || 'unknown';
     const userRole = currentUser?.role || '';
-    console.log('🗑️ handleDeleteOrders called with', orderIds.length, 'orders, role:', userRole);
+    console.log('🗑️ handleDeleteOrders called with', orderIds.length, 'orders, role:', userRole, 'ids:', orderIds, 'types:', orderIds.map(id => typeof id));
     if (!userRole) {
       alert('Delete failed: No role set. Try logging out and back in.');
       return;
@@ -4863,9 +4863,14 @@ function App() {
       body: JSON.stringify({ orderIds }),
     });
     const data = await res.json();
-    console.log('🗑️ Delete response:', res.status, data);
+    console.log('🗑️ Delete response:', res.status, 'ok:', res.ok, 'data:', data);
     if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-    setOrders(prev => prev.filter(o => !orderIds.includes(o.id)));
+    console.log('🗑️ Delete successful, deleted:', data.deleted, 'verified:', data.verified);
+    setOrders(prev => {
+      const filtered = prev.filter(o => !orderIds.includes(o.id));
+      console.log('🗑️ Filtered orders: before=', prev.length, 'after=', filtered.length);
+      return filtered;
+    });
     setWriteToast({ok:true, msg:`✓ Deleted ${data.deleted} order${data.deleted>1?'s':''}`});
     setTimeout(() => setWriteToast(null), 2500);
   }
