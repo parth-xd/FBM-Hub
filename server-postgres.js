@@ -96,18 +96,7 @@ pool.query('SELECT NOW()', (err, res) => {
 // ═══ AUTO-INITIALIZE DATABASE TABLES ═══
 const initializeDatabase = async () => {
   try {
-    // Check if orders table exists
-    const result = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_name = 'orders'
-      )
-    `);
-    
-    if (result.rows[0].exists) {
-      console.log('✅ Database tables already exist');
-      return;
-    }
+    console.log('🔧 Initializing database schema...');
 
     console.log('🔧 Creating database tables...');
 
