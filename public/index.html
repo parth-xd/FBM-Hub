@@ -575,6 +575,11 @@ const API = {
   // Exchange rate
   exchangeRate: () => `${API.base()}/api/exchange-rate/current`,
 
+  // Role requests
+  roleRequests: () => `${API.base()}/api/role-requests`,
+  roleRequestDecide: (id) => `${API.base()}/api/role-requests/${id}/decide`,
+  roleRequestNotifications: () => `${API.base()}/api/role-requests/my-notifications`,
+
   // FBA endpoints
   fbaProducts: () => `${API.base()}/api/fba/products`,
   fbaProduct: (id) => `${API.base()}/api/fba/products/${id}`,
@@ -2752,6 +2757,220 @@ function INSView({orders}) {
 
 /* ═══ ISSUES VIEW — REMOVED ═══ */
 
+/* ═══ ROLE REQUEST DROPDOWN ═══ */
+function RoleRequestDropdown({currentUser, role, onRoleUpdated}) {
+  const [open, setOpen] = React.useState(false);
+  const [pending, setPending] = React.useState(null); // pending request
+  const [loading, setLoading] = React.useState(false);
+  const [notification, setNotification] = React.useState(null); // decided notification
+  const dropdownRef = React.useRef(null);
+
+  const ALL_ROLES = ['owner', 'importer', 'packer'];
+  const ri = ROLES[role] || ROLES.packer;
+
+  // Check for notifications on mount
+  React.useEffect(() => {
+    async function checkNotifications() {
+      try {
+        const res = await fetch(API.roleRequestNotifications(), {
+          headers: {'x-user-email': currentUser?.email || ''}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.notifications?.length > 0) {
+          const latest = data.notifications[0];
+          const seenKey = `role_notif_seen_${latest.id}`;
+          if (!localStorage.getItem(seenKey)) {
+            setNotification(latest);
+            // If approved, update the local role
+            if (latest.status === 'approved' && latest.requested_role !== role) {
+              onRoleUpdated(latest.requested_role);
+            }
+          }
+        }
+      } catch(e) { /* ignore */ }
+    }
+    if (currentUser?.email) checkNotifications();
+  }, [currentUser?.email]);
+
+  // Check for existing pending request
+  React.useEffect(() => {
+    async function checkPending() {
+      try {
+        const res = await fetch(`${API.roleRequests()}?status=pending`, {
+          headers: {'x-user-email': currentUser?.email || ''}
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const myPending = data.requests?.find(r => r.user_email === currentUser?.email);
+        setPending(myPending || null);
+      } catch(e) { /* ignore */ }
+    }
+    if (currentUser?.email) checkPending();
+  }, [currentUser?.email]);
+
+  // Close dropdown on outside click
+  React.useEffect(() => {
+    function handleClick(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  async function requestRole(requestedRole) {
+    if (loading || requestedRole === role) return;
+    setLoading(true);
+    try {
+      const res = await fetch(API.roleRequests(), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'x-user-email': currentUser?.email || ''},
+        body: JSON.stringify({
+          requested_role: requestedRole,
+          current_role: role,
+          user_name: currentUser?.name || ''
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      setPending(data.request);
+      setOpen(false);
+      alert('Role request sent! The owner will review it.');
+    } catch(err) {
+      alert(err.message);
+    }
+    setLoading(false);
+  }
+
+  function dismissNotification() {
+    if (notification) {
+      localStorage.setItem(`role_notif_seen_${notification.id}`, '1');
+      setNotification(null);
+    }
+  }
+
+  return (
+    <div ref={dropdownRef} style={{position:'relative'}}>
+      {/* Notification banner */}
+      {notification&&<div style={{position:'fixed',top:60,right:24,zIndex:10000,background:'#fff',borderRadius:14,padding:'14px 18px',
+        boxShadow:'0 8px 32px rgba(0,0,0,0.15)',border:`2px solid ${notification.status==='approved'?'#34c759':'#ff3b30'}`,maxWidth:340,animation:'fadeIn .3s ease'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:notification.status==='approved'?'#34c759':'#ff3b30',marginBottom:4}}>
+              {notification.status==='approved'?'✓ Role Request Approved':'✗ Role Request Denied'}
+            </div>
+            <div style={{fontSize:12,color:'#1d1d1f'}}>
+              {notification.status==='approved'
+                ? `You are now an ${ROLES[notification.requested_role]?.label || notification.requested_role}!`
+                : `Your request to become ${ROLES[notification.requested_role]?.label || notification.requested_role} was not approved.`}
+            </div>
+          </div>
+          <button onClick={dismissNotification} style={{background:'none',border:'none',color:'#86868b',cursor:'pointer',fontSize:16,padding:0,lineHeight:1}}>✕</button>
+        </div>
+      </div>}
+
+      {/* User pill — clickable */}
+      <div onClick={()=>setOpen(!open)} style={{display:'flex',alignItems:'center',gap:8,background:open?'#e8e8ed':'#f5f5f7',borderRadius:20,padding:'6px 14px 6px 10px',flexShrink:0,cursor:'pointer',transition:'all .2s ease'}} className="header-user-pill">
+        <div style={{width:24,height:24,borderRadius:'50%',background:ri.color,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',fontWeight:700}}>{(currentUser?.name||'?')[0].toUpperCase()}</div>
+        <span style={{fontSize:13,color:'#1d1d1f',fontWeight:500,whiteSpace:'nowrap'}}>{currentUser?.name}</span>
+        <span style={{fontSize:9,color:ri.color,fontWeight:700,textTransform:'uppercase',background:`${ri.color}18`,padding:'2px 6px',borderRadius:6}}>{ri.label}</span>
+      </div>
+
+      {/* Dropdown */}
+      {open&&<div style={{position:'absolute',top:'100%',right:0,marginTop:6,background:'#fff',borderRadius:14,boxShadow:'0 8px 32px rgba(0,0,0,0.15)',border:'1px solid #e5e5ea',padding:'10px 0',minWidth:220,zIndex:9999,animation:'fadeIn .15s ease'}}>
+        <div style={{padding:'8px 16px 4px',fontSize:10,color:'#86868b',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>Current Role</div>
+        <div style={{padding:'6px 16px 10px',fontSize:14,fontWeight:600,color:ri.color,display:'flex',alignItems:'center',gap:8}}>
+          <div style={{width:8,height:8,borderRadius:'50%',background:ri.color}}/>{ri.label}
+        </div>
+        <div style={{height:1,background:'#e5e5ea',margin:'2px 0'}}/>
+        <div style={{padding:'8px 16px 4px',fontSize:10,color:'#86868b',textTransform:'uppercase',letterSpacing:'.06em',fontWeight:700}}>
+          {pending ? 'Pending Request' : 'Request Role Change'}
+        </div>
+        {pending ? (
+          <div style={{padding:'8px 16px',fontSize:12,color:'#ff9f0a',fontWeight:600}}>
+            ⏳ Waiting for approval: {ROLES[pending.requested_role]?.label || pending.requested_role}
+          </div>
+        ) : (
+          ALL_ROLES.filter(r => r !== role && r !== 'owner').map(r => {
+            const roleInfo = ROLES[r];
+            return <button key={r} onClick={()=>requestRole(r)} disabled={loading}
+              style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'8px 16px',border:'none',background:'none',cursor:loading?'not-allowed':'pointer',fontSize:13,fontWeight:500,color:'#1d1d1f',textAlign:'left',transition:'background .15s'}}
+              onMouseEnter={e=>e.currentTarget.style.background='#f5f5f7'} onMouseLeave={e=>e.currentTarget.style.background='none'}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:roleInfo.color}}/>
+              Request {roleInfo.label}
+            </button>;
+          })
+        )}
+      </div>}
+    </div>
+  );
+}
+
+/* ═══ ROLE REQUESTS PANEL (Owner) ═══ */
+function RoleRequestsPanel({onDecision}) {
+  const [requests, setRequests] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    loadRequests();
+  }, []);
+
+  async function loadRequests() {
+    try {
+      const res = await fetch(`${API.roleRequests()}?status=pending`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setRequests(data.requests || []);
+    } catch(e) { /* ignore */ }
+    setLoading(false);
+  }
+
+  async function decide(id, decision) {
+    try {
+      const res = await fetch(API.roleRequestDecide(id), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'x-user-email': window.CURRENT_USER?.email || ''},
+        body: JSON.stringify({ decision })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setRequests(prev => prev.filter(r => r.id !== id));
+      if (onDecision) onDecision(data.request);
+    } catch(err) {
+      alert('Decision failed: ' + err.message);
+    }
+  }
+
+  if (loading) return null;
+  if (requests.length === 0) return null;
+
+  return (
+    <div style={{background:'linear-gradient(135deg,#fff8f0,#fff5f5)',border:'1px solid #fed7aa',borderRadius:14,padding:16,marginBottom:16}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+        <div style={{fontSize:14,fontWeight:700,color:'#1d1d1f',letterSpacing:'-0.01em'}}>🔔 Role Change Requests</div>
+        <span style={{background:'#ff9f0a',color:'#fff',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:10}}>{requests.length}</span>
+      </div>
+      {requests.map(r => (
+        <div key={r.id} style={{background:'#fff',borderRadius:10,padding:'12px 14px',marginBottom:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,boxShadow:'0 1px 3px rgba(0,0,0,0.05)'}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:600,color:'#1d1d1f'}}>{r.user_name || r.user_email}</div>
+            <div style={{fontSize:11,color:'#86868b',marginTop:2}}>
+              <span style={{color:ROLES[r.current_role]?.color||'#86868b',fontWeight:600}}>{ROLES[r.current_role]?.label||r.current_role}</span>
+              {' → '}
+              <span style={{color:ROLES[r.requested_role]?.color||'#86868b',fontWeight:600}}>{ROLES[r.requested_role]?.label||r.requested_role}</span>
+            </div>
+            <div style={{fontSize:10,color:'#86868b',marginTop:2}}>{new Date(r.created_at).toLocaleString()}</div>
+          </div>
+          <div style={{display:'flex',gap:6,flexShrink:0}}>
+            <button onClick={()=>decide(r.id,'approved')} style={{background:'#34c759',color:'#fff',border:'none',borderRadius:8,padding:'6px 14px',fontSize:12,fontWeight:600,cursor:'pointer'}}>Approve</button>
+            <button onClick={()=>decide(r.id,'denied')} style={{background:'#ff3b30',color:'#fff',border:'none',borderRadius:8,padding:'6px 14px',fontSize:12,fontWeight:600,cursor:'pointer'}}>Deny</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ═══ USER MANAGEMENT ═══ */
 function UserManageModal({accounts,onSave,onClose}) {
   const [accs,setAccs]=useState(accounts.map(a=>({...a})));
@@ -4527,6 +4746,29 @@ function App() {
             setOrders(prev => prev.filter(o => !idSet.has(o.id)));
           }
         }
+
+        // Role request notifications
+        if (message.type === 'role-request-created') {
+          // Owner sees this — show toast
+          if (role === 'owner') {
+            const req = message.data;
+            setWriteToast({ok: true, msg: `🔔 ${req.user_name||req.user_email} requested ${ROLES[req.requested_role]?.label||req.requested_role} role`});
+            setTimeout(() => setWriteToast(null), 5000);
+          }
+        }
+
+        if (message.type === 'role-request-decided') {
+          const req = message.data;
+          if (req.user_email === currentUser?.email) {
+            if (req.status === 'approved') {
+              handleRoleUpdated(req.requested_role);
+              setWriteToast({ok: true, msg: `✓ Your role has been updated to ${ROLES[req.requested_role]?.label||req.requested_role}!`});
+            } else {
+              setWriteToast({ok: false, msg: `Your request to become ${ROLES[req.requested_role]?.label||req.requested_role} was not approved`});
+            }
+            setTimeout(() => setWriteToast(null), 5000);
+          }
+        }
       } catch(e) {
         console.error('WebSocket message error:', e);
       }
@@ -4571,6 +4813,20 @@ function App() {
     localStorage.removeItem('sessionToken');
     setCurrentUser(null);
     setScreen('login');
+  }
+
+  function handleRoleUpdated(newRole) {
+    const updated = {...currentUser, role: newRole};
+    setCurrentUser(updated);
+    window.CURRENT_USER = updated;
+    localStorage.setItem('currentUser', JSON.stringify(updated));
+    // Also update the accounts roster
+    try {
+      const accs = JSON.parse(localStorage.getItem('fbm_accounts') || '[]');
+      const updatedAccs = accs.map(a => a.email === currentUser.email ? {...a, role: newRole} : a);
+      localStorage.setItem('fbm_accounts', JSON.stringify(updatedAccs));
+      setAccounts(updatedAccs);
+    } catch(e) { /* ignore */ }
   }
 
   async function handleImportOrders() {
@@ -4699,11 +4955,8 @@ function App() {
             <span style={{fontSize:12,color:'#86868b',whiteSpace:'nowrap',fontWeight:400}}>{{syncing:'Syncing…',error:`Error`,synced:'Live',other:'Offline'}[syncStatus]||'Offline'}</span>
           </div>
 
-          {/* User pill - Desktop only */}
-          <div style={{display:'flex',alignItems:'center',gap:8,background:'#f5f5f7',borderRadius:20,padding:'6px 14px 6px 10px',flexShrink:0,transition:'all .2s ease'}} className="header-user-pill">
-            <div style={{width:24,height:24,borderRadius:'50%',background:ri.color,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',fontWeight:700}}>{(currentUser?.name||'?')[0].toUpperCase()}</div>
-            <span style={{fontSize:13,color:'#1d1d1f',fontWeight:500,whiteSpace:'nowrap'}}>{currentUser?.name}</span>
-          </div>
+          {/* User pill - Desktop only (with role request dropdown) */}
+          <RoleRequestDropdown currentUser={currentUser} role={role} onRoleUpdated={handleRoleUpdated}/>
 
           {ri.canManage&&<button style={{background:'none',border:'none',color:'#86868b',padding:'6px 8px',fontSize:18,flexShrink:0,cursor:'pointer',borderRadius:8,transition:'color 0.2s'}} onClick={()=>setShowUsers(true)} title="Manage users">⚙️</button>}
           <button style={{background:'none',border:'none',color:'#86868b',padding:'6px 8px',fontSize:18,flexShrink:0,cursor:'pointer',borderRadius:8,transition:'color 0.2s'}} onClick={handleLogout} title="Sign out">↗</button>
@@ -4749,7 +5002,13 @@ function App() {
       <div style={{flex:1,overflow:'hidden'}}>
         {orders.length>0&&(
           <>
-            {activeTab==='dashboard'&&ri.canSeeAnalytics&&<OwnerDashboard orders={orders}/>}
+            {activeTab==='dashboard'&&ri.canSeeAnalytics&&<>
+              <div style={{padding:'20px 24px 0'}}><RoleRequestsPanel onDecision={(req)=>{
+                setWriteToast({ok:true,msg:`Role request ${req.status}: ${req.user_name||req.user_email}`});
+                setTimeout(()=>setWriteToast(null),3000);
+              }}/></div>
+              <OwnerDashboard orders={orders}/>
+            </>}
             {activeTab==='operations'&&<OperationsTable orders={orders} setOrders={setOrders} role={role} syncCell={syncCell} createMultiPO={createMultiPO} getCombinedDiscrepancy={getCombinedDiscrepancy} onImportOrders={handleImportOrders} onBulkImportCsv={handleBulkImportCsv} onDeleteOrders={handleDeleteOrders} liveGbpUsdRate={liveGbpUsdRate}/>}            
             {activeTab==='ins'&&<INSView orders={orders}/>}
             {activeTab==='audit'&&ri.canSeeAnalytics&&<AuditLogView/>}

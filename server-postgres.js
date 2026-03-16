@@ -217,6 +217,21 @@ const initializeDatabase = async () => {
       END $$;
     `);
 
+    // Create role_requests table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS role_requests (
+        id SERIAL PRIMARY KEY,
+        user_email VARCHAR(255) NOT NULL,
+        user_name VARCHAR(255),
+        current_role VARCHAR(50) NOT NULL,
+        requested_role VARCHAR(50) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        decided_by VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        decided_at TIMESTAMP
+      )
+    `);
+
     console.log('✅ Database tables created successfully');
   } catch (err) {
     console.error('❌ Database initialization error:', err.message);
@@ -992,6 +1007,121 @@ app.post('/api/audit-logs', async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     console.warn('Audit log POST failed:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ═══ ROLE REQUEST SYSTEM ═══
+
+// Create a role change request
+app.post('/api/role-requests', async (req, res) => {
+  try {
+    const { requested_role } = req.body;
+    const userEmail = req.headers['x-user-email'] || '';
+    const userName = req.body.user_name || '';
+    const currentRole = req.body.current_role || '';
+
+    if (!userEmail || !requested_role || !currentRole) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const VALID_ROLES = ['owner', 'importer', 'packer'];
+    if (!VALID_ROLES.includes(requested_role)) {
+      return res.status(400).json({ error: 'Invalid role requested' });
+    }
+
+    if (currentRole === requested_role) {
+      return res.status(400).json({ error: 'Already have this role' });
+    }
+
+    // Check for existing pending request
+    const existing = await pool.query(
+      `SELECT id FROM role_requests WHERE user_email = $1 AND status = 'pending'`,
+      [userEmail]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'You already have a pending role request' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO role_requests (user_email, user_name, current_role, requested_role)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [userEmail, userName, currentRole, requested_role]
+    );
+
+    broadcast('role-request-created', result.rows[0]);
+    res.json({ ok: true, request: result.rows[0] });
+  } catch (error) {
+    console.error('Role request error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get role requests (owner only)
+app.get('/api/role-requests', async (req, res) => {
+  try {
+    const status = req.query.status || 'pending';
+    const result = await pool.query(
+      `SELECT * FROM role_requests WHERE status = $1 ORDER BY created_at DESC`,
+      [status]
+    );
+    res.json({ requests: result.rows });
+  } catch (error) {
+    console.error('Get role requests error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get pending notifications for a user (decided requests they haven't seen)
+app.get('/api/role-requests/my-notifications', async (req, res) => {
+  try {
+    const userEmail = req.headers['x-user-email'] || '';
+    const result = await pool.query(
+      `SELECT * FROM role_requests WHERE user_email = $1 AND status != 'pending' AND decided_at > NOW() - INTERVAL '7 days' ORDER BY decided_at DESC`,
+      [userEmail]
+    );
+    res.json({ notifications: result.rows });
+  } catch (error) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Decide on a role request (approve/deny)
+app.post('/api/role-requests/:id/decide', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision } = req.body; // 'approved' or 'denied'
+    const ownerEmail = req.headers['x-user-email'] || '';
+
+    if (!['approved', 'denied'].includes(decision)) {
+      return res.status(400).json({ error: 'Decision must be approved or denied' });
+    }
+
+    const result = await pool.query(
+      `UPDATE role_requests SET status = $1, decided_by = $2, decided_at = NOW()
+       WHERE id = $3 AND status = 'pending' RETURNING *`,
+      [decision, ownerEmail, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found or already decided' });
+    }
+
+    const request = result.rows[0];
+
+    // If approved, update the user's role in the users table
+    if (decision === 'approved') {
+      await pool.query(
+        `UPDATE users SET role = $1 WHERE email = $2`,
+        [request.requested_role, request.user_email]
+      );
+    }
+
+    broadcast('role-request-decided', request);
+    res.json({ ok: true, request });
+  } catch (error) {
+    console.error('Role request decide error:', error);
     res.status(500).json({ error: error.message });
   }
 });
