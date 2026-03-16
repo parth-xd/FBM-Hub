@@ -1715,10 +1715,12 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
 
       // Add new row to orders list
       setOrders?.(prev => [...prev, newMultiPOOrder]);
+      console.log('📦 Exception PO created locally with temp id:', tempId);
 
       // Save exception PO to database
       try {
         const userEmail = window.CURRENT_USER?.email || 'unknown';
+        console.log('💾 Saving exception PO to server...', {tempId, exceptionReason, qtyToSource});
         const res = await fetch(API.createOrder(), {
           method: 'POST',
           headers: {'Content-Type': 'application/json', 'x-user-email': userEmail},
@@ -1747,23 +1749,27 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             status: 'pending_source',
           }),
         });
+        console.log('📦 Server response:', res.status, res.ok);
         const data = await res.json();
+        console.log('📦 Response data:', data);
         if (res.ok && data?.ok && data.order) {
           // Update local state with the real DB id
           const realId = data.order.id;
-          console.log('✅ Exception PO saved to DB, replacing temp id', tempId, 'with real id', realId);
+          console.log('✅ Exception PO SAVED to DB! Real id:', realId);
           setOrders?.(prev => prev.map(o => o.id === tempId ? {...o, id: realId} : o));
+          alert('✓ Exception PO saved to database (ID: ' + realId + ')');
         } else {
-          console.error('Exception PO DB save failed:', data);
+          console.error('❌ Exception PO DB save FAILED:', data);
           // Remove the temp order since it wasn't saved
           setOrders?.(prev => prev.filter(o => o.id !== tempId));
-          alert('Exception PO failed to save to database: ' + (data?.error || 'Unknown error'));
+          const errMsg = data?.error || res.statusText || 'Unknown error';
+          alert('❌ Exception PO FAILED to save to database:\n\n' + errMsg);
         }
       } catch (err) {
-        console.error('Exception PO DB save error:', err);
+        console.error('❌ Exception PO network error:', err);
         // Remove the temp order since it wasn't saved
         setOrders?.(prev => prev.filter(o => o.id !== tempId));
-        alert('Exception PO failed to save to database: ' + err.message);
+        alert('❌ Exception PO FAILED (network error):\n\n' + err.message);
       }
 
       // Also create Multi-PO entry for Issues tab
@@ -4639,6 +4645,7 @@ function App() {
       console.error('❌ Load orders error:', err.message);
       setSyncStatus('error');
       setSyncError(err.message || 'Failed to load orders');
+      setOrders([]); // Clear stale state when load fails - don't show ghost orders
     }
   }
 
