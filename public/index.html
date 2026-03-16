@@ -545,7 +545,7 @@ const API = {
   base: () => window.API_BASE,
   
   // Auth endpoints
-  sendLoginEmail: (email) => `${API.base()}/api/auth/send-login-email`,
+  sendLoginEmail: (email) => `${API.base()}/api/auth/request-login`,
   verifyToken: (token) => `${API.base()}/api/auth/verify?token=${encodeURIComponent(token)}`,
   signup: () => `${API.base()}/api/auth/signup`,
   me: () => `${API.base()}/api/auth/me`,
@@ -1199,19 +1199,21 @@ function LoginScreen({onLogin}) {
     e.preventDefault();
     if (!email) return;
 
-    // ⚡ OWNER AUTO-LOGIN
-    if (email.toLowerCase() === 'parttthh@gmail.com') {
-      const demoUser = {
-        email: email.toLowerCase(),
-        name: 'Parth Sharma',
-        role: 'owner',
+    // ⚡ TEAM AUTO-LOGIN — Check if email matches any account in team roster
+    const savedAccs = (()=>{try{const s=localStorage.getItem('fbm_accounts');return s?JSON.parse(s):DEFAULT_ACCOUNTS;}catch{return DEFAULT_ACCOUNTS;}})();
+    const matchedAccount = savedAccs.find(a => a.email && a.email.toLowerCase() === email.toLowerCase().trim());
+    if (matchedAccount) {
+      const user = {
+        email: matchedAccount.email.toLowerCase(),
+        name: matchedAccount.name || matchedAccount.email,
+        role: matchedAccount.role || 'importer',
         loginTime: new Date().toISOString()
       };
-      window.CURRENT_USER = demoUser;
-      window.SESSION_TOKEN = 'demo-session-' + Date.now();
+      window.CURRENT_USER = user;
+      window.SESSION_TOKEN = 'team-session-' + Date.now();
       localStorage.setItem('sessionToken', window.SESSION_TOKEN);
-      localStorage.setItem('currentUser', JSON.stringify(demoUser));
-      onLogin(demoUser);
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      onLogin(user);
       return;
     }
 
