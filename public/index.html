@@ -1657,11 +1657,6 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
       try {
         const res = await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({exception_reason:exceptionReason,exception_po_created:true,status:'refund_requested'})});
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        onUpdate(order.id, {
-          exceptionReason: exceptionReason,
-          exceptionPOCreated: true,
-          status: 'refund_requested'
-        });
       } catch(err) {
         console.error('Failed to persist refund exception:', err);
         alert('Failed to save refund exception: ' + err.message);
@@ -1720,9 +1715,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
         discrepancy: null
       };
 
-      // Add new row to orders list
-      setOrders?.(prev => [...prev, newMultiPOOrder]);
-      console.log('📦 Exception PO created locally with temp id:', tempId);
+      console.log('📦 Creating exception PO, temp id:', tempId);
 
       // Save exception PO to database
       try {
@@ -1767,15 +1760,11 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
           if (typeof loadOrders === 'function') await loadOrders();
         } else {
           console.error('❌ Exception PO DB save FAILED:', data);
-          // Remove the temp order since it wasn't saved
-          setOrders?.(prev => prev.filter(o => o.id !== tempId));
           const errMsg = data?.error || res.statusText || 'Unknown error';
           alert('❌ Exception PO FAILED to save to database:\n\n' + errMsg);
         }
       } catch (err) {
         console.error('❌ Exception PO network error:', err);
-        // Remove the temp order since it wasn't saved
-        setOrders?.(prev => prev.filter(o => o.id !== tempId));
         alert('❌ Exception PO FAILED (network error):\n\n' + err.message);
       }
 
@@ -1803,11 +1792,6 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
       try {
         const res = await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({exception_reason:exceptionReason,exception_po_created:true,is_multi_po:true})});
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        onUpdate(order.id, {
-          exceptionReason: exceptionReason,
-          exceptionPOCreated: true,
-          multiPO: true
-        });
       } catch(err) {
         console.error('Failed to persist exception on original:', err);
         alert('Failed to mark original order as exception: ' + err.message);
@@ -1867,21 +1851,13 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             <div style={{display:'flex',gap:8}}>
               <div style={{flex:1}}>
                 <label style={{fontSize:12,color:'#86868b',fontWeight:500,marginBottom:6,display:'block'}}>Buy Link</label>
-                <input className="input" value={order.buyLink||''} placeholder="Paste buy link…"
-                  onChange={e=>onUpdate(order.id,{buyLink:e.target.value})}
+                <input className="input" key={`bl-${order.id}-${order.buyLink}`} defaultValue={order.buyLink||''} placeholder="Paste buy link…"
                   onBlur={e=>{const v=e.target.value||null;const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({buy_link:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);}).catch(err=>{console.error('Buy link save failed:',err);alert('Buy link save failed: '+err.message);});}}
                   style={{fontSize:13,fontFamily:'IBM Plex Mono',padding:'10px 14px'}}/>
               </div>
               <div style={{flex:1}}>
                 <label style={{fontSize:12,color:'#86868b',fontWeight:500,marginBottom:6,display:'block'}}>SKU</label>
-                <input className="input" value={order.sku||''} placeholder="SKU…"
-                  onChange={e=>{
-                    const newSku=e.target.value;
-                    const newAsin=extractASIN(newSku);
-                    const updates={sku:newSku};
-                    if(newAsin) updates.asin=newAsin;
-                    onUpdate(order.id,updates);
-                  }}
+                <input className="input" key={`sku-${order.id}-${order.sku}`} defaultValue={order.sku||''} placeholder="SKU…"
                   onBlur={e=>{const v=e.target.value||null;const asin=v?extractASIN(v):null;const userEmail=window.CURRENT_USER?.email||'unknown';const body={sku:v};if(asin)body.asin=asin;fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify(body)}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);}).catch(err=>{console.error('SKU save failed:',err);alert('SKU save failed: '+err.message);});}}
                   style={{fontSize:13,fontFamily:'IBM Plex Mono',padding:'10px 14px'}}/>
               </div>
@@ -1933,8 +1909,6 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                 <input type="number" step="0.01" min="0" className="input" value={editUnitBuy} placeholder="0.00"
                   onChange={e=>{
                     setEditUnitBuy(e.target.value);
-                    const v=e.target.value===''?null:parseFloat(e.target.value);
-                    onUpdate(order.id,{unitBuyPriceIncVAT:v});
                   }}
                   onBlur={e=>{const v=e.target.value===''?null:parseFloat(e.target.value);if(v!=null){logChange(order.orderId,'unitBuyPriceIncVAT',order.unitBuyPriceIncVAT,v);const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({unit_buy_price_inc_vat:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Unit buy price save failed:',err));}}}
                   style={{fontSize:15,fontFamily:'IBM Plex Mono',fontWeight:600,padding:'10px 14px'}}/>
@@ -1944,8 +1918,6 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                 <input type="number" step="0.01" min="0" className="input" value={editDelivFee} placeholder="0.00"
                   onChange={e=>{
                     setEditDelivFee(e.target.value);
-                    const v=e.target.value===''?null:parseFloat(e.target.value);
-                    onUpdate(order.id,{deliveryFeePerLine:v});
                   }}
                   onBlur={e=>{const v=e.target.value===''?null:parseFloat(e.target.value);if(v!=null){logChange(order.orderId,'deliveryFeePerLine',order.deliveryFeePerLine,v);const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({delivery_fee_per_line:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Delivery fee save failed:',err));}}}
                   style={{fontSize:15,fontFamily:'IBM Plex Mono',fontWeight:600,padding:'10px 14px'}}/>
@@ -1955,8 +1927,6 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                 <input type="number" step="1" min="1" className="input" value={editBQty} placeholder="1"
                   onChange={e=>{
                     setEditBQty(e.target.value);
-                    const v=e.target.value===''?null:parseInt(e.target.value);
-                    onUpdate(order.id,{bQty:v});
                   }}
                   onBlur={e=>{const v=e.target.value===''?null:parseInt(e.target.value);if(v!=null){logChange(order.orderId,'bQty',order.bQty,v);const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({b_qty:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('B-Qty save failed:',err));}}}
                   style={{fontSize:15,fontFamily:'IBM Plex Mono',fontWeight:600,padding:'10px 14px'}}/>
@@ -1967,8 +1937,6 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                   onChange={e=>{
                     const v=e.target.value;
                     setEditWeight(v);
-                    const numV=v===''?null:parseFloat(v);
-                    onUpdate(order.id,{weight:numV});
                   }}
                   onBlur={e=>{const v=e.target.value===''?null:parseFloat(e.target.value);if(v!=null){logChange(order.orderId,'weight',order.weight||order.orderWeight,v);const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({weight:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Weight save failed:',err));}}}
                   style={{fontSize:15,fontFamily:'IBM Plex Mono',fontWeight:600,padding:'10px 14px'}}/>
@@ -1995,7 +1963,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                 const newVal=current==='YES'?'NO':'YES';
                 logChange(order.orderId,'vatStatus',current,newVal);
                 const userEmail=window.CURRENT_USER?.email||'unknown';
-                try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({vat_status:newVal})});if(!r.ok)throw new Error(`HTTP ${r.status}`);onUpdate(order.id,{vatStatus:newVal});}catch(err){console.error('VAT status save failed:',err);alert('VAT save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}
+                try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({vat_status:newVal})});if(!r.ok)throw new Error(`HTTP ${r.status}`);}catch(err){console.error('VAT status save failed:',err);alert('VAT save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}
               }}>
                 <div style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4}}>VAT Status <span style={{fontSize:9,color:'#0071e3'}}>(click to toggle)</span></div>
                 <div style={{fontSize:15,fontWeight:600,fontFamily:'IBM Plex Mono',color:(order.vatStatus||(refData?refData.vat_status:null))==='YES'?'#ff9f0a':'#86868b',letterSpacing:'-0.02em'}}>{order.vatStatus||(refData?refData.vat_status:null)||'—'}</div>
@@ -2064,7 +2032,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                               if(!confirm(`Mark as checked by ${a.name}?`)) return;
                               logChange(order.orderId,'checkedBy',order.checkedBy,a.name);
                               const userEmail=window.CURRENT_USER?.email||'unknown';
-                              try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({checked_by:a.name})});if(!r.ok)throw new Error(`HTTP ${r.status}`);onUpdate(order.id,{checkedBy:a.name});}catch(err){console.error('Checked by save failed:',err);alert('Save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}
+                              try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({checked_by:a.name})});if(!r.ok)throw new Error(`HTTP ${r.status}`);}catch(err){console.error('Checked by save failed:',err);alert('Save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}
                             }}>{isMe?'✓ ':''}{a.name}</button>;
                         })}
                       </div>;
@@ -2105,21 +2073,20 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             </button>}
             {/* Lock */}
             {ri.canLock&&<button style={{background:order.beingEdited?'#f0fdf4':'#f5f5f7',border:'none',color:order.beingEdited?'#34c759':'#86868b',fontSize:13,padding:'8px 16px',fontWeight:600,borderRadius:20,cursor:'pointer',transition:'all 0.2s'}}
-              onClick={async()=>{const lockUrl=order.beingEdited?API.unlockOrder(order.id):API.lockOrder(order.id);const userEmail=window.CURRENT_USER?.email||'unknown';logChange(order.orderId,'beingEdited',order.beingEdited,!order.beingEdited,order.beingEdited?'Unlocked':'Locked for importing');try{const r=await fetch(lockUrl,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({userEmail})});if(!r.ok)throw new Error(`HTTP ${r.status}`);const data=await r.json();onUpdate(order.id,{beingEdited:!!data?.order?.locked_by});}catch(err){console.error('Lock/unlock failed:',err);alert('Lock/unlock failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}}}>
+              onClick={async()=>{const lockUrl=order.beingEdited?API.unlockOrder(order.id):API.lockOrder(order.id);const userEmail=window.CURRENT_USER?.email||'unknown';logChange(order.orderId,'beingEdited',order.beingEdited,!order.beingEdited,order.beingEdited?'Unlocked':'Locked for importing');try{const r=await fetch(lockUrl,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({userEmail})});if(!r.ok)throw new Error(`HTTP ${r.status}`);}catch(err){console.error('Lock/unlock failed:',err);alert('Lock/unlock failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}}}>
               {order.beingEdited?'🔒 Locked — Release':'✏ Mark Importing'}
             </button>}
             {/* Label printed */}
             <button disabled={order.qtyReceived===null || order.qtyReceived===undefined || order.qtyReceived===''} style={{background:order.labelPrinted?'#f0fdf4':'#f5f5f7',border:'none',color:order.labelPrinted?'#34c759':'#86868b',fontSize:13,padding:'8px 16px',fontWeight:600,borderRadius:20,cursor:(order.qtyReceived===null||order.qtyReceived===undefined||order.qtyReceived==='')?'not-allowed':'pointer',opacity:(order.qtyReceived===null||order.qtyReceived===undefined||order.qtyReceived==='')?0.4:1,transition:'all 0.2s'}}
-              onClick={async()=>{const v=!order.labelPrinted;const userEmail=window.CURRENT_USER?.email||'unknown';const body={label_printed:v,locked_gbp_usd_rate:v?parseFloat(gbpUsdRate):null};try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify(body)});if(!r.ok)throw new Error(`HTTP ${r.status}`);onUpdate(order.id,{labelPrinted:v,lockedGbpUsdRate:v?parseFloat(gbpUsdRate):null});logChange(order.orderId,'labelPrinted',!v,v,`Qty: ${order.qtyReceived}/${order.bQty}`);}catch(err){console.error('Label save failed:',err);alert('Label save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}}}
+              onClick={async()=>{const v=!order.labelPrinted;const userEmail=window.CURRENT_USER?.email||'unknown';const body={label_printed:v,locked_gbp_usd_rate:v?parseFloat(gbpUsdRate):null};try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify(body)});if(!r.ok)throw new Error(`HTTP ${r.status}`);logChange(order.orderId,'labelPrinted',!v,v,`Qty: ${order.qtyReceived}/${order.bQty}`);}catch(err){console.error('Label save failed:',err);alert('Label save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}}}
             >
               {order.labelPrinted?'✓ Label Printed':'Mark Label Printed'}{(order.qtyReceived===null||order.qtyReceived===undefined||order.qtyReceived==='')?` (enter Qty first)`:''}
             </button>
             {/* Qty received */}
             <div style={{display:'flex',alignItems:'center',gap:8}}>
               <span style={{color:'#86868b',fontSize:13}}>Qty Rcvd:</span>
-              <input type="number" min="0" value={order.qtyReceived??''}
+              <input type="number" min="0" key={`mqr-${order.id}-${order.qtyReceived}`} defaultValue={order.qtyReceived??''}
                 style={{width:54,background:'#f5f5f7',border:'none',borderRadius:8,color:'#1d1d1f',padding:'7px',fontSize:14,fontFamily:'IBM Plex Mono',textAlign:'center'}}
-                onChange={e=>{const v=e.target.value===''?null:Number(e.target.value);const d=order.bQty!=null&&v!=null?Number(order.bQty)-v:null;onUpdate(order.id,{qtyReceived:v,discrepancy:d});}}
                 onBlur={async e=>{const v=e.target.value===''?null:Number(e.target.value);if(v!==null){const d=order.bQty!=null?Number(order.bQty)-v:null;logChange(order.orderId,'qtyReceived',order.qtyReceived,v,`B-Qty: ${order.bQty}, Discrepancy: ${d}`);const userEmail=window.CURRENT_USER?.email||'unknown';try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({qty_received:v,discrepancy:d})});if(!r.ok)throw new Error(`HTTP ${r.status}`);}catch(err){console.error('Qty save failed:',err);alert('Qty save failed: '+err.message);if(typeof loadOrders==='function')loadOrders();}}}}
               />
               <span style={{color:'#86868b',fontSize:13}}>of {order.bQty??'?'}</span>
@@ -2267,7 +2234,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                     <button style={{flex:1,background:'rgba(34,197,94,0.18)',border:'1px solid rgba(34,197,94,0.3)',color:'#22c55e',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:700,cursor:'pointer'}}
                       onClick={async()=>{
                         const userEmail=window.CURRENT_USER?.email||'unknown';
-                        try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({label_printed:true,locked_gbp_usd_rate:parseFloat(gbpUsdRate)})});if(!r.ok)throw new Error(`HTTP ${r.status}`);onUpdate(order.id,{labelPrinted:true,lockedGbpUsdRate:parseFloat(gbpUsdRate)});}catch(err){console.error('Mark shipped failed:',err);alert('Save failed: '+err.message);}
+                        try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({label_printed:true,locked_gbp_usd_rate:parseFloat(gbpUsdRate)})});if(!r.ok)throw new Error(`HTTP ${r.status}`);}catch(err){console.error('Mark shipped failed:',err);alert('Save failed: '+err.message);}
                         setShowFulfillmentForm(false);
                         setLabelData(null);
                         setFulfillmentError('');
@@ -3274,16 +3241,16 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         </span>;
       }
       case 'shipBy': return <span style={{fontFamily:'IBM Plex Mono',fontSize:10,color:isOverdue?'#ef4444':'#86868b',fontWeight:isOverdue?700:400}}>{formatDateVal(order.shipByDate)}{isOverdue?' ⚠':''}</span>;
-      case 'poId': return <input type="text" value={order.poId||''} onClick={e=>e.stopPropagation()}
-          onChange={e=>{e.stopPropagation();const v=e.target.value||null;updateOrder(order.id,{poId:v});}}
+      case 'poId': return <input type="text" key={`po-${order.id}-${order.poId}`} defaultValue={order.poId||''} onClick={e=>e.stopPropagation()}
+          onChange={e=>{e.stopPropagation();}}
           onBlur={e=>{const v=e.target.value||null;logChange(order.orderId,'poId',order.poId,v);const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({po_id:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('PO ID update failed:',err));}}
           style={{width:65,background:'#f5f5f7',border:'1px solid #d2d2d7',borderRadius:5,color:order.poId?'#0071e3':'#86868b',textAlign:'center',padding:'4px',fontSize:10,fontFamily:'IBM Plex Mono'}}
           placeholder="PO ID"/>;
       case 'sQty': return <span style={{fontFamily:'IBM Plex Mono',color:'#86868b',fontSize:11,textAlign:'center',display:'block'}}>{order.sQty??'—'}</span>;
       case 'bQty': return <span style={{fontFamily:'IBM Plex Mono',color:'#86868b',fontSize:11,textAlign:'center',display:'block'}}>{order.bQty??'—'}</span>;
       case 'weight': return <div style={{display:'flex',flexDirection:'column',gap:1,alignItems:'center'}}>
-        <input type="number" step="0.01" min="0" value={order.weight??''} onClick={e=>e.stopPropagation()}
-          onChange={e=>{e.stopPropagation();try{const v=e.target.value===''?null:Number(e.target.value);updateOrder(order.id,{weight:v});const syncValue=v===null||v===''?null:v;syncCell(order.id,24,syncValue);}catch(err){console.error('Weight update error:',err);}}}
+        <input type="number" step="0.01" min="0" key={`w-${order.id}-${order.weight}`} defaultValue={order.weight??''} onClick={e=>e.stopPropagation()}
+          onChange={e=>{e.stopPropagation();}}
           onBlur={e=>{const v=e.target.value===''?null:Number(e.target.value);if(v!==null){logChange(order.orderId,'weight',order.weight,v,'From table view');const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({weight:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('Weight update failed:',err));}}}
           style={{width:55,background:'#f5f5f7',border:'1px solid #d2d2d7',borderRadius:5,color:order.weight!=null?'#0071e3':'#86868b',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}}
           placeholder="kg"/>
@@ -3292,16 +3259,16 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
       case 'buyExcVAT': return <span style={{fontFamily:'IBM Plex Mono',color:'#fbbf24',fontWeight:700,fontSize:11}}>{order.totalBuyPriceExcVAT!=null?`£${Number(order.totalBuyPriceExcVAT).toFixed(2)}`:'—'}</span>;
       case 'hts': return <span style={{fontFamily:'IBM Plex Mono',color:'#a78bfa',fontSize:9}}>{order.htsCode||'—'}</span>;
       case 'profit': return <span style={{fontFamily:'IBM Plex Mono',fontSize:11,color:order.expectedProfit!=null?(Number(order.expectedProfit)>=0?'#22c55e':'#ef4444'):'#86868b'}}>{order.expectedProfit!=null?`$${Number(order.expectedProfit).toFixed(2)}`:'—'}</span>;
-      case 'qtyRcvd': return <input type="number" min="0" value={order.qtyReceived??''} onClick={e=>e.stopPropagation()}
-        onChange={e=>{e.stopPropagation();try{const v=e.target.value===''?null:Number(e.target.value);const d=order.bQty!=null&&v!=null?Number(order.bQty)-v:null;updateOrder(order.id,{qtyReceived:v,discrepancy:d});const syncValue=v===null||v===''?null:v;syncCell(order.id,28,syncValue);}catch(err){console.error('QtyReceived update error:',err);}}}
-        onBlur={e=>{const v=e.target.value===''?null:Number(e.target.value);if(v!==null){logChange(order.orderId,'qtyReceived',order.qtyReceived,v,'From table view');const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({qty_received:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('QtyRcvd update failed:',err));}}}
+      case 'qtyRcvd': return <input type="number" min="0" key={`qr-${order.id}-${order.qtyReceived}`} defaultValue={order.qtyReceived??''} onClick={e=>e.stopPropagation()}
+        onChange={e=>{e.stopPropagation();}}
+        onBlur={e=>{const v=e.target.value===''?null:Number(e.target.value);if(v!==null){const d=order.bQty!=null?Number(order.bQty)-v:null;logChange(order.orderId,'qtyReceived',order.qtyReceived,v,'From table view');const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({qty_received:v,discrepancy:d})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('QtyRcvd update failed:',err));}}}
         style={{width:50,background:'#f5f5f7',border:'1px solid #d2d2d7',borderRadius:5,color:order.qtyReceived!=null&&order.bQty!=null&&Number(order.qtyReceived)!==Number(order.bQty)?'#ef4444':'#22c55e',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}}/>;
       case 'disc': return <span style={{fontFamily:'IBM Plex Mono',color:order.discrepancy!=null&&Number(order.discrepancy)!==0?'#ef4444':'#86868b',fontWeight:order.discrepancy!=null&&Number(order.discrepancy)!==0?800:400,fontSize:11}}>{order.discrepancy!=null&&Number(order.discrepancy)!==0?Number(order.discrepancy):'—'}</span>;
-      case 'label': return <button onClick={async e=>{e.stopPropagation();const v=!order.labelPrinted;const userEmail=window.CURRENT_USER?.email||'unknown';const body={label_printed:v,locked_gbp_usd_rate:v?liveGbpUsdRate:null};try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify(body)});if(!r.ok)throw new Error(`HTTP ${r.status}`);updateOrder(order.id,{labelPrinted:v,lockedGbpUsdRate:v?liveGbpUsdRate:null});logChange(order.orderId,'labelPrinted',!v,v,'From table view');}catch(err){console.error('Label save failed:',err);alert('Label save failed: '+err.message);}}}
+      case 'label': return <button onClick={async e=>{e.stopPropagation();const v=!order.labelPrinted;const userEmail=window.CURRENT_USER?.email||'unknown';const body={label_printed:v,locked_gbp_usd_rate:v?liveGbpUsdRate:null};try{const r=await fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify(body)});if(!r.ok)throw new Error(`HTTP ${r.status}`);logChange(order.orderId,'labelPrinted',!v,v,'From table view');}catch(err){console.error('Label save failed:',err);alert('Label save failed: '+err.message);}}}
         style={{background:order.labelPrinted?'rgba(34,197,94,0.18)':'#f5f5f7',border:`1px solid ${order.labelPrinted?'#22c55e40':'#d2d2d7'}`,color:order.labelPrinted?'#22c55e':'#6e6e73',borderRadius:6,padding:'3px 9px',cursor:'pointer',fontSize:13,fontWeight:700}}>
         {order.labelPrinted?'✓':'○'}
       </button>
-      case 'lock': return ri.canLock?<button onClick={async e=>{e.stopPropagation();const lockUrl=order.beingEdited?API.unlockOrder(order.id):API.lockOrder(order.id);const userEmail=window.CURRENT_USER?.email||'unknown';try{const r=await fetch(lockUrl,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({userEmail})});if(!r.ok)throw new Error(`HTTP ${r.status}`);const data=await r.json();updateOrder(order.id,{beingEdited:!!data?.order?.locked_by});logChange(order.orderId,'beingEdited',order.beingEdited,!order.beingEdited,order.beingEdited?'Unlocked from table':'Locked from table');}catch(err){console.error('Lock/unlock failed:',err);alert('Lock/unlock failed: '+err.message);}}}
+      case 'lock': return ri.canLock?<button onClick={async e=>{e.stopPropagation();const lockUrl=order.beingEdited?API.unlockOrder(order.id):API.lockOrder(order.id);const userEmail=window.CURRENT_USER?.email||'unknown';try{const r=await fetch(lockUrl,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({userEmail})});if(!r.ok)throw new Error(`HTTP ${r.status}`);logChange(order.orderId,'beingEdited',order.beingEdited,!order.beingEdited,order.beingEdited?'Unlocked from table':'Locked from table');}catch(err){console.error('Lock/unlock failed:',err);alert('Lock/unlock failed: '+err.message);}}}
         style={{background:order.beingEdited?'rgba(16,185,129,0.18)':'#f5f5f7',border:`1px solid ${order.beingEdited?'#10b98140':'#d2d2d7'}`,color:order.beingEdited?'#10b981':'#6e6e73',borderRadius:6,padding:'3px 8px',cursor:'pointer',fontSize:11,fontWeight:700}}>
         {order.beingEdited?'🔒':'✏'}
       </button>:<span style={{color:'#c7c7cc',fontSize:10}}>—</span>;
@@ -4402,7 +4369,6 @@ function App() {
   });
 
   const [orders, setOrders] = React.useState([]);
-  const [orderHistory, setOrderHistory] = React.useState([]); // For Ctrl+Z undo
   const [syncStatus, setSyncStatus] = React.useState('idle');
   const [writeToast, setWriteToast] = React.useState(null);
   const [syncError, setSyncError] = React.useState(null);
@@ -4546,51 +4512,6 @@ function App() {
     }
   }, [currentUser]);
 
-  // Track order changes for undo history (max 20 states)
-  React.useEffect(() => {
-    if (orders.length > 0) {
-      setOrderHistory(prev => {
-        if (JSON.stringify(prev[prev.length - 1]) !== JSON.stringify(orders)) {
-          const newHistory = [...prev, orders];
-          return newHistory.length > 20 ? newHistory.slice(-20) : newHistory;
-        }
-        return prev;
-      });
-    }
-  }, [orders]);
-
-  // Handle Ctrl+Z for undo (with sheet sync)
-  React.useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && orderHistory.length > 1) {
-        e.preventDefault();
-        const currentState = orders;
-        const previousState = orderHistory[orderHistory.length - 2];
-        if (previousState) {
-          // Sync reverted changes back to sheet
-          previousState.forEach(prevOrder => {
-            const currOrder = currentState.find(o => o.id === prevOrder.id);
-            if (currOrder) {
-              // Check each syncable field and queue changes if different
-              if (prevOrder.weight !== currOrder.weight) syncCell(prevOrder.sheetRow, 24, prevOrder.weight === null || prevOrder.weight === undefined ? '' : prevOrder.weight);
-              if (prevOrder.qtyReceived !== currOrder.qtyReceived) syncCell(prevOrder.sheetRow, 28, prevOrder.qtyReceived === null || prevOrder.qtyReceived === undefined ? '' : prevOrder.qtyReceived);
-              if (prevOrder.labelPrinted !== currOrder.labelPrinted) syncCell(prevOrder.sheetRow, 31, prevOrder.labelPrinted ? 'TRUE' : 'FALSE');
-              if (prevOrder.exceptionReason !== currOrder.exceptionReason) syncCell(prevOrder.sheetRow, 32, prevOrder.exceptionReason || '');
-              if (prevOrder.exceptionPOCreated !== currOrder.exceptionPOCreated) syncCell(prevOrder.sheetRow, 34, prevOrder.exceptionPOCreated ? 'TRUE' : 'FALSE');
-            }
-          });
-          
-          setOrders(previousState);
-          setOrderHistory(prev => prev.slice(0, -1));
-          setWriteToast({ok: true, msg: '↶ Undone & synced to database'});
-          setTimeout(() => setWriteToast(null), 1500);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [orderHistory, orders, syncCell]);
-
   async function loadOrders() {
     setSyncStatus('syncing');
     setOrders([]); // Clear immediately - start fresh from DB only
@@ -4647,7 +4568,6 @@ function App() {
       });
 
       setOrders(parsed);
-      setOrderHistory([parsed]);
       setSyncStatus('synced');
       setLastSync(new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}));
       setSyncError(null);
@@ -4799,6 +4719,12 @@ function App() {
             const idSet = new Set(ids);
             setOrders(prev => prev.filter(o => !idSet.has(o.id)));
           }
+        }
+
+        if (message.type === 'orders-imported') {
+          // Reload full order list from server after import
+          console.log('📦 Orders imported, reloading from server...');
+          loadOrders();
         }
 
         // Role request notifications
