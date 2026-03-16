@@ -209,6 +209,14 @@ const initializeDatabase = async () => {
       CREATE INDEX IF NOT EXISTS idx_fba_sku ON fba_products(sku);
     `);
 
+    // Add locked_gbp_usd_rate column if it doesn't exist
+    await pool.query(`
+      DO $$ BEGIN
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS locked_gbp_usd_rate NUMERIC(10,6);
+      EXCEPTION WHEN duplicate_column THEN NULL;
+      END $$;
+    `);
+
     console.log('✅ Database tables created successfully');
   } catch (err) {
     console.error('❌ Database initialization error:', err.message);
@@ -556,7 +564,7 @@ app.post('/api/orders/update-cell', async (req, res) => {
       'expected_profit','unit_buy_price_inc_vat','delivery_fee_per_line',
       'vat_status','suggested_weight','shipstation_link','refunded','refund_date',
       'expected_delivery_date','supplier_order_date','supplier_order_ref',
-      'expected_delivery_time','marked_dispatched_on'
+      'expected_delivery_time','marked_dispatched_on','locked_gbp_usd_rate'
     ];
 
     if (!ALLOWED_COLS.includes(col)) {
@@ -707,7 +715,7 @@ app.post('/api/orders/:id', async (req, res) => {
       'expected_profit','unit_buy_price_inc_vat','delivery_fee_per_line',
       'vat_status','suggested_weight','shipstation_link','refunded','refund_date',
       'expected_delivery_date','supplier_order_date','supplier_order_ref',
-      'expected_delivery_time','marked_dispatched_on'
+      'expected_delivery_time','marked_dispatched_on','locked_gbp_usd_rate'
     ];
 
     const safeKeys = Object.keys(updates).filter(k => ALLOWED_COLS.includes(k));
@@ -985,6 +993,40 @@ app.post('/api/audit-logs', async (req, res) => {
   } catch (error) {
     console.warn('Audit log POST failed:', error.message);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ═══ EXCHANGE RATE (cached) ═══
+let _cachedRate = { value: 1.34, fetchedAt: 0 };
+const RATE_CACHE_MS = 15 * 60 * 1000; // 15 min cache
+
+async function fetchLiveGbpUsdRate() {
+  if (Date.now() - _cachedRate.fetchedAt < RATE_CACHE_MS) return _cachedRate.value;
+  try {
+    // frankfurter.app is free, no API key needed
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('https://api.frankfurter.app/latest?from=GBP&to=USD', { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const rate = data?.rates?.USD;
+    if (rate && typeof rate === 'number' && rate > 0.5 && rate < 3) {
+      _cachedRate = { value: rate, fetchedAt: Date.now() };
+      console.log(`✅ GBP/USD rate updated: ${rate}`);
+    }
+  } catch (err) {
+    console.warn('Exchange rate fetch failed, using cached:', err.message);
+  }
+  return _cachedRate.value;
+}
+
+app.get('/api/exchange-rate/current', async (req, res) => {
+  try {
+    const rate = await fetchLiveGbpUsdRate();
+    res.json({ gbp_usd_rate: rate, cached: Date.now() - _cachedRate.fetchedAt < 1000 ? false : true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch rate', gbp_usd_rate: _cachedRate.value });
   }
 });
 

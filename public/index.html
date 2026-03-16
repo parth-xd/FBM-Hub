@@ -572,6 +572,9 @@ const API = {
   // Health check
   health: () => `${API.base()}/api/health`,
 
+  // Exchange rate
+  exchangeRate: () => `${API.base()}/api/exchange-rate/current`,
+
   // FBA endpoints
   fbaProducts: () => `${API.base()}/api/fba/products`,
   fbaProduct: (id) => `${API.base()}/api/fba/products/${id}`,
@@ -1540,7 +1543,7 @@ function LoginScreen({onLogin}) {
 }
 
 /* ═══ ORDER DETAIL MODAL ═══ */
-function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrders,getCombinedDiscrepancy,orders}) {
+function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrders,getCombinedDiscrepancy,orders,liveGbpUsdRate}) {
   if(!order) return null;
   const [showExceptionForm, setShowExceptionForm] = React.useState(false);
   const [exceptionReason, setExceptionReason] = React.useState('');
@@ -1558,28 +1561,21 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
   const [editWeight, setEditWeight] = React.useState(order.orderWeight != null ? String(order.orderWeight) : '');
   const [refData, setRefData] = React.useState(null);
   const [refLoading, setRefLoading] = React.useState(false);
-  const [gbpUsdRate, setGbpUsdRate] = React.useState('1.34');
+  const [gbpUsdRate, setGbpUsdRate] = React.useState(() => {
+    // Use locked rate for shipped orders, live rate otherwise
+    if (order.labelPrinted && order.lockedGbpUsdRate) return String(order.lockedGbpUsdRate);
+    return String(liveGbpUsdRate || 1.34);
+  });
 
-  // Fetch current GBP/USD rate from backend
+  // Keep rate in sync with live rate for unshipped orders
   React.useEffect(() => {
-    const base = window.API_BASE || '';
-    fetch(`${base}/api/exchange-rate/current`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data && data.gbp_usd_rate) setGbpUsdRate(String(data.gbp_usd_rate)); })
-      .catch(() => {});
-  }, []);
+    if (!order.labelPrinted && liveGbpUsdRate) {
+      setGbpUsdRate(String(liveGbpUsdRate));
+    }
+  }, [liveGbpUsdRate, order.labelPrinted]);
 
-  // Fetch ASIN reference data on mount
-  React.useEffect(() => {
-    if (!order.asin) return;
-    setRefLoading(true);
-    const base = window.API_BASE || '';
-    fetch(`${base}/api/reference/${encodeURIComponent(order.asin)}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setRefData(data); })
-      .catch(() => {})
-      .finally(() => setRefLoading(false));
-  }, [order.asin]);
+  // GBP/USD rate — live for active orders, locked for shipped
+  // Reference data — loaded from order itself, no server endpoint exists
 
   // Live profitability calculation
   const liveCalc = useMemo(() => {
@@ -1843,6 +1839,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                 <label style={{fontSize:12,color:'#86868b',fontWeight:500,marginBottom:6,display:'block'}}>Buy Link</label>
                 <input className="input" value={order.buyLink||''} placeholder="Paste buy link…"
                   onChange={e=>onUpdate(order.id,{buyLink:e.target.value})}
+                  onBlur={e=>{const v=e.target.value||null;const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({buy_link:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);}).catch(err=>{console.error('Buy link save failed:',err);alert('Buy link save failed: '+err.message);});}}
                   style={{fontSize:13,fontFamily:'IBM Plex Mono',padding:'10px 14px'}}/>
               </div>
               <div style={{flex:1}}>
@@ -1855,6 +1852,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                     if(newAsin) updates.asin=newAsin;
                     onUpdate(order.id,updates);
                   }}
+                  onBlur={e=>{const v=e.target.value||null;const asin=v?extractASIN(v):null;const userEmail=window.CURRENT_USER?.email||'unknown';const body={sku:v};if(asin)body.asin=asin;fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify(body)}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);}).catch(err=>{console.error('SKU save failed:',err);alert('SKU save failed: '+err.message);});}}
                   style={{fontSize:13,fontFamily:'IBM Plex Mono',padding:'10px 14px'}}/>
               </div>
             </div>
@@ -1954,6 +1952,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                 ['Buy inc. VAT', liveCalc?`£${liveCalc.totalBuyIncVAT.toFixed(2)}`:order.totalBuyPriceIncVAT!=null?`£${Number(order.totalBuyPriceIncVAT).toFixed(2)}`:'—', '#1d1d1f'],
                 ['Buy exc. VAT', liveCalc?`£${liveCalc.totalBuyExcVAT.toFixed(2)}`:order.totalBuyPriceExcVAT!=null?`£${Number(order.totalBuyPriceExcVAT).toFixed(2)}`:'—', '#ff9f0a'],
                 ['Shipping', liveCalc&&liveCalc.shippingGBP?`£${liveCalc.shippingGBP.toFixed(2)}`:order.shippingCostGBP!=null?`£${Number(order.shippingCostGBP).toFixed(2)}`:'—', '#86868b'],
+                ['GBP/USD', (order.labelPrinted&&order.lockedGbpUsdRate?`${Number(order.lockedGbpUsdRate).toFixed(4)} 🔒`:`${parseFloat(gbpUsdRate).toFixed(4)}`), order.labelPrinted&&order.lockedGbpUsdRate?'#86868b':'#0071e3'],
                 ['VAT', order.vatStatus||(refData?refData.vat_status:null)||'—', (order.vatStatus||(refData?refData.vat_status:null))==='YES'?'#ff9f0a':'#86868b'],
                 ['Profit', displayProfit!=null?`$${displayProfit.toFixed(2)}`:'—', displayProfitable!=null?(displayProfitable?'#34c759':'#ff3b30'):'#86868b'],
                 ['Margin', displayMargin!=null?`${displayMargin.toFixed(1)}%`:'—', displayMargin!=null?(displayMargin>=0?'#34c759':'#ff3b30'):'#86868b'],
@@ -2083,7 +2082,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             </button>}
             {/* Label printed */}
             <button disabled={order.qtyReceived===null || order.qtyReceived===undefined || order.qtyReceived===''} style={{background:order.labelPrinted?'#f0fdf4':'#f5f5f7',border:'none',color:order.labelPrinted?'#34c759':'#86868b',fontSize:13,padding:'8px 16px',fontWeight:600,borderRadius:20,cursor:(order.qtyReceived===null||order.qtyReceived===undefined||order.qtyReceived==='')?'not-allowed':'pointer',opacity:(order.qtyReceived===null||order.qtyReceived===undefined||order.qtyReceived==='')?0.4:1,transition:'all 0.2s'}}
-              onClick={()=>{const v=!order.labelPrinted;onUpdate(order.id,{labelPrinted:v});syncCell(order.id,31,v?'TRUE':'FALSE');logChange(order.orderId,'labelPrinted',!v,v,`Qty: ${order.qtyReceived}/${order.bQty}`);}}
+              onClick={()=>{const v=!order.labelPrinted;onUpdate(order.id,{labelPrinted:v,lockedGbpUsdRate:v?parseFloat(gbpUsdRate):null});syncCell(order.id,31,v?'TRUE':'FALSE');logChange(order.orderId,'labelPrinted',!v,v,`Qty: ${order.qtyReceived}/${order.bQty}`);if(v){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:parseFloat(gbpUsdRate)})}).catch(err=>console.error('Rate lock failed:',err));}else{const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:null})}).catch(err=>console.error('Rate unlock failed:',err));}}}
             >
               {order.labelPrinted?'✓ Label Printed':'Mark Label Printed'}{(order.qtyReceived===null||order.qtyReceived===undefined||order.qtyReceived==='')?` (enter Qty first)`:''}
             </button>
@@ -2238,8 +2237,10 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                   <div style={{display:'flex',gap:10}}>
                     <button style={{flex:1,background:'rgba(34,197,94,0.18)',border:'1px solid rgba(34,197,94,0.3)',color:'#22c55e',borderRadius:8,padding:'10px 16px',fontSize:13,fontWeight:700,cursor:'pointer'}}
                       onClick={()=>{
-                        onUpdate(order.id,{labelPrinted:true});
+                        onUpdate(order.id,{labelPrinted:true,lockedGbpUsdRate:parseFloat(gbpUsdRate)});
                         syncCell(order.id,31,'TRUE');
+                        const userEmail=window.CURRENT_USER?.email||'unknown';
+                        fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:parseFloat(gbpUsdRate)})}).catch(err=>console.error('Rate lock failed:',err));
                         setShowFulfillmentForm(false);
                         setLabelData(null);
                         setFulfillmentError('');
@@ -2851,7 +2852,7 @@ function UserManageModal({accounts,onSave,onClose}) {
 }
 
 /* ═══ OPERATIONS TABLE ═══ */
-function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombinedDiscrepancy,onImportOrders,onBulkImportCsv,onDeleteOrders}) {
+function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombinedDiscrepancy,onImportOrders,onBulkImportCsv,onDeleteOrders,liveGbpUsdRate}) {
   const [filter,setFilter]=useState('all');
   const [search,setSearch]=useState('');
   const [page,setPage]=useState(0);
@@ -3055,7 +3056,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         onBlur={e=>{const v=e.target.value===''?null:Number(e.target.value);if(v!==null){logChange(order.orderId,'qtyReceived',order.qtyReceived,v,'From table view');const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({qty_received:v})}).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).catch(err=>console.error('QtyRcvd update failed:',err));}}}
         style={{width:50,background:'#f5f5f7',border:'1px solid #d2d2d7',borderRadius:5,color:order.qtyReceived!=null&&order.bQty!=null&&Number(order.qtyReceived)!==Number(order.bQty)?'#ef4444':'#22c55e',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}}/>;
       case 'disc': return <span style={{fontFamily:'IBM Plex Mono',color:order.discrepancy!=null&&Number(order.discrepancy)!==0?'#ef4444':'#86868b',fontWeight:order.discrepancy!=null&&Number(order.discrepancy)!==0?800:400,fontSize:11}}>{order.discrepancy!=null&&Number(order.discrepancy)!==0?Number(order.discrepancy):'—'}</span>;
-      case 'label': return <button onClick={e=>{e.stopPropagation();const v=!order.labelPrinted;updateOrder(order.id,{labelPrinted:v});syncCell(order.id,31,v?'TRUE':'FALSE');logChange(order.orderId,'labelPrinted',!v,v,'From table view');}}
+      case 'label': return <button onClick={e=>{e.stopPropagation();const v=!order.labelPrinted;updateOrder(order.id,{labelPrinted:v,lockedGbpUsdRate:v?liveGbpUsdRate:null});syncCell(order.id,31,v?'TRUE':'FALSE');logChange(order.orderId,'labelPrinted',!v,v,'From table view');if(v){const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:liveGbpUsdRate})}).catch(err=>console.error('Rate lock failed:',err));}else{const userEmail=window.CURRENT_USER?.email||'unknown';fetch(API.updateOrder(order.id),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail},body:JSON.stringify({locked_gbp_usd_rate:null})}).catch(err=>console.error('Rate unlock failed:',err));}}}
         style={{background:order.labelPrinted?'rgba(34,197,94,0.18)':'#f5f5f7',border:`1px solid ${order.labelPrinted?'#22c55e40':'#d2d2d7'}`,color:order.labelPrinted?'#22c55e':'#6e6e73',borderRadius:6,padding:'3px 9px',cursor:'pointer',fontSize:13,fontWeight:700}}>
         {order.labelPrinted?'✓':'○'}
       </button>
@@ -3246,7 +3247,7 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         </div>
       </div>
 
-      {selected&&<OrderModal order={selected} role={role} onClose={()=>setSelected(null)} onUpdate={updateOrder} syncCell={syncCell} onCreateMultiPO={createMultiPO} setOrders={setOrders} getCombinedDiscrepancy={getCombinedDiscrepancy} orders={orders}/>} 
+      {selected&&<OrderModal order={selected} role={role} onClose={()=>setSelected(null)} onUpdate={updateOrder} syncCell={syncCell} onCreateMultiPO={createMultiPO} setOrders={setOrders} getCombinedDiscrepancy={getCombinedDiscrepancy} orders={orders} liveGbpUsdRate={liveGbpUsdRate}/>} 
 
       {showSingleImport&&<div className="modal-overlay" onClick={()=>setShowSingleImport(false)}>
         <div className="modal-box" style={{width:'min(96vw,760px)'}} onClick={e=>e.stopPropagation()}>
@@ -4117,6 +4118,7 @@ function mapDbOrderToFrontend(order) {
     markedDispatchedOn: order.marked_dispatched_on,
     refunded: !!order.refunded,
     refundDate: order.refund_date,
+    lockedGbpUsdRate: order.locked_gbp_usd_rate != null ? parseFloat(order.locked_gbp_usd_rate) : null,
     multiPO: !!order.is_multi_po,
     beingEdited: !!order.locked_by,
     htsCode: hts.code,
@@ -4156,6 +4158,7 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [showUsers, setShowUsers] = React.useState(false);
   const [lastSync, setLastSync] = React.useState(null);
+  const [liveGbpUsdRate, setLiveGbpUsdRate] = React.useState(1.34);
   
   // Accounts state for Manage Users
   const [accounts, setAccounts] = React.useState(() => {
@@ -4406,6 +4409,22 @@ function App() {
     if(!COLUMNS) {
       loadSchema().catch(err => console.warn('Schema load optional:', err));
     }
+  },[]);
+
+  // Fetch live GBP/USD exchange rate on mount and every 15 min
+  React.useEffect(()=>{
+    let cancelled = false;
+    async function fetchRate() {
+      try {
+        const res = await fetch(API.exchangeRate());
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.gbp_usd_rate && !cancelled) setLiveGbpUsdRate(data.gbp_usd_rate);
+      } catch(e) { /* keep last known rate */ }
+    }
+    fetchRate();
+    const interval = setInterval(fetchRate, 15 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); };
   },[]);
 
   // Load initially when user is logged in
@@ -4731,7 +4750,7 @@ function App() {
         {orders.length>0&&(
           <>
             {activeTab==='dashboard'&&ri.canSeeAnalytics&&<OwnerDashboard orders={orders}/>}
-            {activeTab==='operations'&&<OperationsTable orders={orders} setOrders={setOrders} role={role} syncCell={syncCell} createMultiPO={createMultiPO} getCombinedDiscrepancy={getCombinedDiscrepancy} onImportOrders={handleImportOrders} onBulkImportCsv={handleBulkImportCsv} onDeleteOrders={handleDeleteOrders}/>}            
+            {activeTab==='operations'&&<OperationsTable orders={orders} setOrders={setOrders} role={role} syncCell={syncCell} createMultiPO={createMultiPO} getCombinedDiscrepancy={getCombinedDiscrepancy} onImportOrders={handleImportOrders} onBulkImportCsv={handleBulkImportCsv} onDeleteOrders={handleDeleteOrders} liveGbpUsdRate={liveGbpUsdRate}/>}            
             {activeTab==='ins'&&<INSView orders={orders}/>}
             {activeTab==='audit'&&ri.canSeeAnalytics&&<AuditLogView/>}
             {activeTab==='fba-central'&&<FBACentralCommand currentUser={currentUser} role={role}/>}
