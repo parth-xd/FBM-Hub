@@ -26,7 +26,7 @@
 - [ ] `PUBLIC_URL` = `https://fbm-hub-api.render.com`
 - [ ] `JWT_SECRET` = (32+ character random string)
 - [ ] `RESEND_API_KEY` = (API key from resend.com)
-- [ ] `EMAIL_FROM` = `Babaclick <onboarding@resend.dev>`
+- [ ] `EMAIL_FROM` = `FBM Hub <onboarding@resend.dev>`
 - [ ] `ADMIN_EMAIL` = your@email.com
 - [ ] `OWNER_EMAIL` = owner@email.com
 

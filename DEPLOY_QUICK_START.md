@@ -50,7 +50,7 @@ git push -u origin main
 | `PUBLIC_URL` | `https://fbm-hub-api.render.com` |
 | `JWT_SECRET` | `$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")` |
 | `RESEND_API_KEY` | (from resend.com) |
-| `EMAIL_FROM` | `Babaclick <onboarding@resend.dev>` |
+| `EMAIL_FROM` | `FBM Hub <onboarding@resend.dev>` |
 | `ADMIN_EMAIL` | your@email.com |
 | `OWNER_EMAIL` | your@email.com |
 

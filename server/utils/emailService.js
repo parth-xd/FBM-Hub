@@ -19,9 +19,9 @@ const sendVerificationEmail = async (email, verificationToken) => {
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: email,
-    subject: 'Email Verification - Babaclick FBM Operations Hub',
+    subject: 'Email Verification - FBM Operations Hub',
     html: `
-      <h2>Welcome to Babaclick FBM Operations Hub</h2>
+      <h2>Welcome to FBM Operations Hub</h2>
       <p>Please verify your email address to activate your account:</p>
       <a href="${verificationLink}" style="background: #667eea; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">
         Verify Email

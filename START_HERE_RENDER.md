@@ -64,7 +64,7 @@ postgresql://postgres:XXXX@dpg-XXXX.render.internal:5432/fbm_hub_prod
 | `PUBLIC_URL` | `https://fbm-hub-api.render.com` |
 | `JWT_SECRET` | (paste a 32-character random string - see below) |
 | `RESEND_API_KEY` | (get from resend.com - see below) |
-| `EMAIL_FROM` | `Babaclick <onboarding@resend.dev>` |
+| `EMAIL_FROM` | `FBM Hub <onboarding@resend.dev>` |
 | `ADMIN_EMAIL` | your@email.com |
 | `OWNER_EMAIL` | your@email.com |
 

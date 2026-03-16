@@ -2,7 +2,7 @@
 
 ## 📋 Project Overview
 
-Full-stack web app for Babaclick FBM operations with:
+Full-stack web app for FBM operations with:
 - ✅ Email-based authentication with admin approval
 - ✅ Role-based access (Owner, Importer, Packer)
 - ✅ Google Sheets integration for orders

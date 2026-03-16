@@ -84,7 +84,7 @@ Click **Add Environment Variable** for each:
 | `PUBLIC_URL` | `https://fbm-hub-api.render.com` |
 | `JWT_SECRET` | (generate a random 32+ char string) |
 | `RESEND_API_KEY` | Your Resend API key |
-| `EMAIL_FROM` | `Babaclick <onboarding@resend.dev>` |
+| `EMAIL_FROM` | `FBM Hub <onboarding@resend.dev>` |
 | `ADMIN_EMAIL` | Your email |
 | `OWNER_EMAIL` | Your email |
 

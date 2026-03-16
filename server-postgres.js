@@ -233,7 +233,7 @@ const sendEmail = async (to, subject, html) => {
     }
 
     const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'Babaclick <onboarding@resend.dev>',
+      from: process.env.EMAIL_FROM || 'FBM Hub <onboarding@resend.dev>',
       to,
       subject,
       html,
@@ -920,6 +920,21 @@ app.get('/api/audit-logs', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/audit-logs', async (req, res) => {
+  try {
+    const { order_id, user_email, user_name, action, field_name, old_value, new_value } = req.body;
+    await pool.query(
+      `INSERT INTO audit_logs (order_id, user_email, action, field_name, old_value, new_value, changed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+      [order_id || null, user_email || 'unknown', action || 'UPDATE', field_name || '', String(old_value ?? ''), String(new_value ?? '')]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    console.warn('Audit log POST failed:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

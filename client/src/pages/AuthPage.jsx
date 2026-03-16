@@ -36,7 +36,7 @@ export const LoginPage = () => {
   return (
     <div className="auth-container">
       <div className="auth-box">
-        <h1>Babaclick FBM Operations Hub</h1>
+        <h1>FBM Operations Hub</h1>
         <h2>Login</h2>
         {error && <div className="error-message">{error}</div>}
         <form onSubmit={handleSubmit}>
@@ -106,7 +106,7 @@ export const RegisterPage = () => {
   return (
     <div className="auth-container">
       <div className="auth-box">
-        <h1>Babaclick FBM Operations Hub</h1>
+        <h1>FBM Operations Hub</h1>
         <h2>Register</h2>
         {error && <div className="error-message">{error}</div>}
         {success && (

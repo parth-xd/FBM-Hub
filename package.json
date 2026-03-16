@@ -1,7 +1,7 @@
 {
-  "name": "babaclick-fbm-hub",
+  "name": "fbm-hub",
   "version": "1.0.0",
-  "description": "Babaclick FBM Operations Hub - Email Auth, Admin Approval, Google Sheets Integration",
+  "description": "FBM Operations Hub - Email Auth, Admin Approval, Google Sheets Integration",
   "main": "server-postgres.js",
   "scripts": {
     "start": "node server-postgres.js",
