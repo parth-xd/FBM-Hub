@@ -196,16 +196,13 @@ const sanitizeInput = (input) => {
   if (typeof input === 'string') {
     return xss(input.trim());
   }
+  if (Array.isArray(input)) {
+    return input.map(item => sanitizeInput(item));
+  }
   if (typeof input === 'object' && input !== null) {
     const sanitized = {};
     for (const [key, value] of Object.entries(input)) {
-      if (typeof value === 'string') {
-        sanitized[key] = xss(value.trim());
-      } else if (typeof value === 'object') {
-        sanitized[key] = sanitizeInput(value);
-      } else {
-        sanitized[key] = value;
-      }
+      sanitized[key] = sanitizeInput(value);
     }
     return sanitized;
   }
