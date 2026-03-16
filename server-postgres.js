@@ -610,7 +610,10 @@ app.post('/api/orders/bulk-delete', async (req, res) => {
     const userEmail = req.headers['x-user-email'] || 'unknown';
     const userRole = req.headers['x-user-role'] || '';
 
+    console.log(`🗑️  DELETE REQUEST: orderIds=${JSON.stringify(orderIds)}, userEmail=${userEmail}, userRole=${userRole}`);
+
     if (!['owner', 'importer'].includes(userRole)) {
+      console.log(`🗑️  REJECTED: role '${userRole}' not allowed`);
       return res.status(403).json({ error: 'Only owners and importers can delete orders' });
     }
 

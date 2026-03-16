@@ -1674,8 +1674,9 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
       }
 
       // Create a new order row with same Order ID but different supplier
+      const tempId = 'temp-' + Date.now(); // Temp ID until DB assigns real one
       const newMultiPOOrder = {
-        id: Math.max(...orders.map(o => o.id || 0)) + 1, // New unique ID
+        id: tempId,
         sheetRow: Math.max(...orders.map(o => o.sheetRow || 0)) + 1, // Next available row
         orderId: order.orderId, // SAME ORDER ID
         asin: order.asin,
@@ -1749,14 +1750,20 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
         const data = await res.json();
         if (res.ok && data?.ok && data.order) {
           // Update local state with the real DB id
-          setOrders?.(prev => prev.map(o => o.id === newMultiPOOrder.id ? {...o, id: data.order.id} : o));
+          const realId = data.order.id;
+          console.log('✅ Exception PO saved to DB, replacing temp id', tempId, 'with real id', realId);
+          setOrders?.(prev => prev.map(o => o.id === tempId ? {...o, id: realId} : o));
         } else {
           console.error('Exception PO DB save failed:', data);
-          alert('Exception PO created locally but failed to save to database: ' + (data?.error || 'Unknown error'));
+          // Remove the temp order since it wasn't saved
+          setOrders?.(prev => prev.filter(o => o.id !== tempId));
+          alert('Exception PO failed to save to database: ' + (data?.error || 'Unknown error'));
         }
       } catch (err) {
         console.error('Exception PO DB save error:', err);
-        alert('Exception PO created locally but failed to save to database: ' + err.message);
+        // Remove the temp order since it wasn't saved
+        setOrders?.(prev => prev.filter(o => o.id !== tempId));
+        alert('Exception PO failed to save to database: ' + err.message);
       }
 
       // Also create Multi-PO entry for Issues tab
@@ -2066,7 +2073,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
           <div style={{borderTop:'1px solid rgba(0,0,0,0.06)',paddingTop:16,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
             {/* Delete row */}
             {(role==='importer'||role==='owner')&&<button style={{background:'#fff5f5',border:'none',color:'#ff3b30',fontSize:13,padding:'8px 16px',fontWeight:600,borderRadius:20,cursor:'pointer',transition:'all 0.2s'}}
-              onClick={async()=>{if(confirm('Delete this order permanently? This cannot be undone.')){try{console.log('🗑️ Delete requested for order.id:', order.id, 'type:', typeof order.id, 'orderId:', order.orderId);logChange(order.orderId,'DELETE',order.productName,null,'Order permanently deleted');const userEmail=window.CURRENT_USER?.email||'unknown';const userRole=window.CURRENT_USER?.role||role;console.log('🗑️ Sending delete to server with role:', userRole, 'sending orderIds:', [order.id]);const res=await fetch(API.bulkDelete(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail,'x-user-role':userRole},body:JSON.stringify({orderIds:[order.id]})});const data=await res.json();console.log('🗑️ Delete response status:', res.status, 'ok:', res.ok, 'data:', data);if(res.ok&&data?.ok){console.log('🗑️ Delete successful, deleted:', data.deleted, 'verified:', data.verified);if(data.deleted===0){alert('Warning: Order was not found in the database (may have been a local-only order). Removing from view.');console.warn('🗑️ Delete returned 0 rows - order may not exist in DB');}setOrders?.(prev=>{const filtered=prev.filter(o=>o.id!==order.id);console.log('🗑️ Filtered orders: before=', prev.length, 'after=', filtered.length);return filtered;});onClose();}else{alert('Delete failed: '+(data?.error||'Unknown error'));}}catch(err){console.error('🗑️ Delete error:', err);alert('Delete failed: '+err.message);}}}}
+              onClick={async()=>{if(confirm('Delete this order permanently? This cannot be undone.')){try{if(typeof order.id==='string'&&order.id.startsWith('temp-')){setOrders?.(prev=>prev.filter(o=>o.id!==order.id));onClose();return;}console.log('🗑️ Delete requested for order.id:', order.id, 'type:', typeof order.id, 'orderId:', order.orderId);logChange(order.orderId,'DELETE',order.productName,null,'Order permanently deleted');const userEmail=window.CURRENT_USER?.email||'unknown';const userRole=window.CURRENT_USER?.role||role;const res=await fetch(API.bulkDelete(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':userEmail,'x-user-role':userRole},body:JSON.stringify({orderIds:[order.id]})});const data=await res.json();console.log('🗑️ Delete response:', res.status, data);if(res.ok&&data?.ok){if(data.deleted===0){alert('Warning: Order was not found in the database. Removing from view.');console.warn('🗑️ Delete returned 0 rows - order may not exist in DB');}setOrders?.(prev=>prev.filter(o=>o.id!==order.id));onClose();}else{alert('Delete failed: '+(data?.error||'Unknown error'));}}catch(err){console.error('🗑️ Delete error:', err);alert('Delete failed: '+err.message);}}}}
               title="Permanently delete this order">
               Delete
             </button>}
@@ -3299,10 +3306,22 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
     try {
       const base = window.API_BASE || '';
       const userEmail = window.CURRENT_USER?.email || 'unknown';
-      const res = await fetch(`${base}/api/shipstation/import-single`, {
+      const res = await fetch(`${base}/api/orders/create`, {
         method:'POST',
         headers:{'Content-Type':'application/json','x-user-email':userEmail},
-        body: JSON.stringify({ ...singleImport, importedBy: userEmail }),
+        body: JSON.stringify({
+          order_id: singleImport.orderId.trim(),
+          sku: singleImport.sku || null,
+          s_qty: parseInt(singleImport.qty) || 1,
+          b_qty: parseInt(singleImport.qty) || 1,
+          product_name: singleImport.productName || null,
+          order_date: singleImport.orderDate || null,
+          ship_by_date: singleImport.shipByDate || null,
+          total_sell_price: singleImport.totalSellPrice ? parseFloat(singleImport.totalSellPrice) : null,
+          buy_link: singleImport.buyLink || null,
+          po_id: singleImport.poId || null,
+          status: 'pending',
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`);
@@ -4725,10 +4744,10 @@ function App() {
               // Avoid duplicates — check by DB id AND by order_id+product_name for temp-id orders
               setOrders(prev => {
                 if (prev.some(o => o.id === newOrder.id)) return prev;
-                // Also check if a temp-id version exists (from local exception PO creation)
-                const tempIdx = prev.findIndex(o => o.orderId === newOrder.orderId && o.productName === newOrder.productName && typeof o.id === 'number' && o.id > 100000);
+                // Check if a temp-id version exists (from local exception PO creation)
+                const tempIdx = prev.findIndex(o => typeof o.id === 'string' && String(o.id).startsWith('temp-') && o.orderId === newOrder.orderId && o.productName === newOrder.productName);
                 if (tempIdx >= 0) {
-                  // Replace the temp-id version with the real one
+                  console.log('🔄 Replacing temp order', prev[tempIdx].id, 'with real DB order', newOrder.id);
                   const updated = [...prev];
                   updated[tempIdx] = newOrder;
                   return updated;
