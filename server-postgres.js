@@ -571,6 +571,8 @@ app.post('/api/orders/create', async (req, res) => {
       return res.status(400).json({ error: 'order_id is required' });
     }
 
+    console.log(`📦 Creating order: ${order_id}, exception_po=${exception_po_created}, by: ${userEmail}`);
+
     const result = await pool.query(
       `INSERT INTO orders (order_id, order_date, product_name, total_sell_price, ship_by_date,
         asin, sku, s_qty, b_qty, po_id, buy_link, is_dhl,
@@ -589,10 +591,11 @@ app.post('/api/orders/create', async (req, res) => {
     );
 
     const order = result.rows[0];
+    console.log(`  ✓ Order created with ID=${order.id}`);
     broadcast('order-created', order);
     res.json({ ok: true, order });
   } catch (error) {
-    console.error('Create order error:', error);
+    console.error('❌ Create order error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -826,9 +829,10 @@ app.post('/api/orders/:id', async (req, res) => {
 
 app.post('/api/orders/:id/lock', async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id, 10);
     const userEmail = req.headers['x-user-email'] || 'unknown';
     
+    console.log(`🔒 Locking order ID=${id}, by: ${userEmail}`);
     const result = await pool.query(
       `UPDATE orders SET locked_by = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
       [userEmail, id]
@@ -848,8 +852,9 @@ app.post('/api/orders/:id/lock', async (req, res) => {
 
 app.post('/api/orders/:id/unlock', async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id, 10);
     
+    console.log(`🔓 Unlocking order ID=${id}`);
     const result = await pool.query(
       `UPDATE orders SET locked_by = NULL, updated_at = NOW() WHERE id = $1 RETURNING *`,
       [id]
@@ -915,7 +920,7 @@ app.post('/api/shipstation/import-csv', async (req, res) => {
     }
 
     // Insert into database
-    console.log(`Processing ${items.length} items`);
+    console.log(`📥 Importing: Processing ${items.length} items`);
     let created = 0;
     let updated = 0;
 
@@ -924,6 +929,7 @@ app.post('/api/shipstation/import-csv', async (req, res) => {
       await client.query('BEGIN');
 
       for (const item of items) {
+        console.log(`  Processing: ${item.order_id}`);
         const existing = await client.query(
           'SELECT id FROM orders WHERE order_id = $1',
           [item.order_id]
