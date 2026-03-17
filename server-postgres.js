@@ -749,7 +749,7 @@ app.get('/api/orders/:id', async (req, res) => {
 
 app.post('/api/orders/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id, 10); // Convert to integer
     const updates = req.body;
     const userEmail = req.headers['x-user-email'] || 'unknown';
     
