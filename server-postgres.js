@@ -292,7 +292,9 @@ const OWNER_EMAIL = 'parttthh@gmail.com';
 
 // ═══ EMAIL SERVICE (GMAIL SMTP) ═══
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // Use TLS
   auth: {
     user: process.env.EMAIL_USER || process.env.GMAIL_USER || 'spbawr@gmail.com',
     pass: process.env.EMAIL_PASSWORD || process.env.GMAIL_APP_PASSWORD || ''
@@ -311,6 +313,7 @@ const transporter = nodemailer.createTransport({
 transporter.verify((error, success) => {
   if (error) {
     console.error('❌ Gmail SMTP verification failed:', error.message);
+    console.error('   Code:', error.code);
   } else {
     console.log('✅ Gmail SMTP transporter verified and ready');
   }
