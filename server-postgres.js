@@ -468,16 +468,11 @@ app.post('/api/auth/me', async (req, res) => {
 });
 
 // ═══ SIGNUP ENDPOINT (New user registration with approval) ═══
-app.post('/api/auth/signup', security.validateRequest(security.schemas.emailSchema), async (req, res) => {
+app.post('/api/auth/signup', security.validateRequest(security.schemas.signupSchema), async (req, res) => {
   try {
     const { email, name, role: requested_role } = req.body;
 
-    // Validate inputs
-    if (!email || !name || !requested_role) {
-      return res.status(400).json({ error: 'Email, name, and role are required' });
-    }
-
-    // Validate role
+    // Validate role (already validated by schema, but double-check)
     const validRoles = ['importer', 'packer'];
     if (!validRoles.includes(requested_role)) {
       return res.status(400).json({ error: 'Invalid role. Must be importer or packer.' });

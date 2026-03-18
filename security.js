@@ -100,6 +100,21 @@ const schemas = {
     }),
   }),
 
+  // Signup with email, name, and role
+  signupSchema: Joi.object({
+    email: Joi.string().email().required().messages({
+      'string.email': 'Invalid email format',
+      'any.required': 'Email is required',
+    }),
+    name: Joi.string().trim().max(100).required().messages({
+      'any.required': 'Name is required',
+    }),
+    role: Joi.string().valid('importer', 'packer').required().messages({
+      'any.required': 'Role is required',
+      'any.only': 'Invalid role. Must be importer or packer',
+    }),
+  }).unknown(false),
+
   // Login token
   tokenSchema: Joi.object({
     token: Joi.string().length(64).required().messages({
