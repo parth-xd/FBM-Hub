@@ -296,23 +296,26 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 const sendEmail = async (to, subject, html) => {
   try {
     if (!resend) {
-      console.warn('⚠️  RESEND_API_KEY not configured.');
+      console.warn('⚠️  RESEND_API_KEY not configured. Email not sent to:', to);
       return false;
     }
 
+    const fromAddress = process.env.EMAIL_FROM || 'FBM Hub <onboarding@resend.dev>';
+    console.log(`📧 Attempting to send email to ${to} from ${fromAddress}`);
+
     const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'FBM Hub <onboarding@resend.dev>',
+      from: fromAddress,
       to,
       subject,
       html,
     });
 
     if (error) {
-      console.error('Email error:', error);
+      console.error(`❌ Email failed for ${to}:`, error);
       return false;
     }
 
-    console.log(`✅ Email sent to ${to}`);
+    console.log(`✅ Email sent to ${to} (ID: ${data?.id})`);
     return true;
   } catch (error) {
     console.error('❌ Email service error:', error.message);
@@ -388,7 +391,12 @@ app.post('/api/auth/request-login', security.validateRequest(security.schemas.em
     loginTokens.set(token, { email, createdAt: Date.now(), used: false });
 
     const loginUrl = `${process.env.PUBLIC_URL || 'http://localhost:3000'}/api/auth/verify?token=${token}`;
-    await sendEmail(email, 'Login Link - FBM Operations Hub', `Click here to login: <a href="${loginUrl}">${loginUrl}</a>`);
+    const emailSent = await sendEmail(email, 'Login Link - FBM Operations Hub', `Click here to login: <a href="${loginUrl}">${loginUrl}</a>`);
+    
+    if (!emailSent) {
+      console.error(`⚠️ Email send failed for ${email}`);
+      return res.status(500).json({ error: 'Failed to send email. Check server logs and Resend API configuration.' });
+    }
 
     res.json({ ok: true, msg: 'Login link sent to email' });
   } catch (error) {
