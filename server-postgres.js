@@ -1311,14 +1311,24 @@ app.post('/api/role-requests/:id/decide', async (req, res) => {
       console.log(`✅ Approving role request: ${request.user_email} → ${request.requested_role}`);
       
       // Try to insert the user if they don't exist, or update their role if they do
-      await pool.query(
+      const userResult = await pool.query(
         `INSERT INTO users (email, name, role, approved, created_at, updated_at)
          VALUES ($1, $2, $3, TRUE, NOW(), NOW())
          ON CONFLICT (email) DO UPDATE
-         SET role = $3, approved = TRUE, updated_at = NOW()`,
+         SET role = $3, approved = TRUE, updated_at = NOW()
+         RETURNING *`,
         [request.user_email, request.user_name || request.user_email.split('@')[0], request.requested_role]
       );
+      const approvedUser = userResult.rows[0];
       console.log(`  ✓ User ${request.user_email} is now approved with role: ${request.requested_role}`);
+      
+      // Broadcast the newly approved user to all clients
+      broadcast('user-approved', {
+        email: approvedUser.email,
+        name: approvedUser.name,
+        role: approvedUser.role,
+        approved: approvedUser.approved
+      });
     } else {
       console.log(`❌ Denying role request: ${request.user_email} → ${request.requested_role}`);
     }

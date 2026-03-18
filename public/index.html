@@ -3005,6 +3005,26 @@ function UserManageModal({accounts,onSave,onClose}) {
   const [accs,setAccs]=useState(accounts.map(a=>({...a})));
   const [n,setN]=useState({name:'',email:'',role:'packer'});
   
+  // Listen for new approved users from WebSocket
+  React.useEffect(() => {
+    function handleUserApproved(event) {
+      const newUser = event.detail;
+      // Check if user already exists
+      const exists = accs.find(a => a.email === newUser.email);
+      if (!exists) {
+        // Add new approved user to the list
+        setAccs(prev => [...prev, {
+          id: `user_${newUser.email}`,
+          name: newUser.name || newUser.email,
+          email: newUser.email,
+          role: newUser.role
+        }]);
+      }
+    }
+    window.addEventListener('user-approved', handleUserApproved);
+    return () => window.removeEventListener('user-approved', handleUserApproved);
+  }, [accs]);
+  
   const handleUpdateAccount = (i, field, value) => {
     const c=[...accs];
     c[i]={...c[i],[field]:value};
@@ -4901,6 +4921,21 @@ function App() {
               setWriteToast({ok: false, msg: `Your request to become ${ROLES[req.requested_role]?.label||req.requested_role} was not approved`});
             }
             setTimeout(() => setWriteToast(null), 5000);
+          }
+        }
+
+        if (message.type === 'user-approved') {
+          // A new user was approved by owner - add them to the users table in real-time
+          const newUser = message.data;
+          console.log(`✅ New user approved: ${newUser.email} (${newUser.role})`);
+          
+          // Dispatch event so UserManageModal can update
+          window.dispatchEvent(new CustomEvent('user-approved', { detail: newUser }));
+          
+          // Show toast notification
+          if (role === 'owner') {
+            setWriteToast({ok: true, msg: `✅ User ${newUser.name || newUser.email} approved as ${ROLES[newUser.role]?.label || newUser.role}`});
+            setTimeout(() => setWriteToast(null), 4000);
           }
         }
       } catch(e) {
