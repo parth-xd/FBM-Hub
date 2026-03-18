@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const Pool = require('pg').Pool;
@@ -290,35 +290,36 @@ const loginTokens = new Map();
 
 const OWNER_EMAIL = 'parttthh@gmail.com';
 
-// ═══ EMAIL SERVICE ═══
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+// ═══ EMAIL SERVICE (GMAIL SMTP) ═══
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER || 'spbawr@gmail.com',
+    pass: process.env.GMAIL_APP_PASSWORD || ''
+  }
+});
 
 const sendEmail = async (to, subject, html) => {
   try {
-    if (!resend) {
-      console.warn('⚠️  RESEND_API_KEY not configured. Email not sent to:', to);
+    if (!process.env.GMAIL_APP_PASSWORD) {
+      console.warn('⚠️  GMAIL_APP_PASSWORD not configured. Email not sent to:', to);
       return false;
     }
 
-    const fromAddress = process.env.EMAIL_FROM || 'FBM Hub <onboarding@resend.dev>';
+    const fromAddress = process.env.EMAIL_FROM || `FBM Hub <${process.env.GMAIL_USER || 'spbawr@gmail.com'}>`;
     console.log(`📧 Attempting to send email to ${to} from ${fromAddress}`);
 
-    const { data, error } = await resend.emails.send({
+    const info = await transporter.sendMail({
       from: fromAddress,
       to,
       subject,
       html,
     });
 
-    if (error) {
-      console.error(`❌ Email failed for ${to}:`, error);
-      return false;
-    }
-
-    console.log(`✅ Email sent to ${to} (ID: ${data?.id})`);
+    console.log(`✅ Email sent to ${to} (ID: ${info.messageId})`);
     return true;
   } catch (error) {
-    console.error('❌ Email service error:', error.message);
+    console.error(`❌ Email failed for ${to}:`, error.message);
     return false;
   }
 };
