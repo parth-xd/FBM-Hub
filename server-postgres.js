@@ -308,6 +308,7 @@ const sendEmail = async (to, subject, html) => {
 
     const fromAddress = process.env.EMAIL_FROM || `FBM Hub <${process.env.EMAIL_USER || process.env.GMAIL_USER || 'spbawr@gmail.com'}>`;
     console.log(`📧 Attempting to send email to ${to} from ${fromAddress}`);
+    console.log(`📧 Using Gmail user: ${process.env.EMAIL_USER || 'spbawr@gmail.com'}`);
 
     const info = await transporter.sendMail({
       from: fromAddress,
@@ -316,10 +317,15 @@ const sendEmail = async (to, subject, html) => {
       html,
     });
 
-    console.log(`✅ Email sent to ${to} (ID: ${info.messageId})`);
+    console.log(`✅ Email sent successfully to ${to}`);
+    console.log(`   Message ID: ${info.messageId}`);
+    console.log(`   Response: ${info.response}`);
     return true;
   } catch (error) {
-    console.error(`❌ Email failed for ${to}:`, error.message);
+    console.error(`❌ Email send failed for ${to}`);
+    console.error(`   Error message: ${error.message}`);
+    console.error(`   Error code: ${error.code}`);
+    console.error(`   Full error:`, error);
     return false;
   }
 };
