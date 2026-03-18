@@ -279,6 +279,10 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
 /* ═══ MOBILE RESPONSIVE ═══ */
 @media (max-width: 768px) {
   body { font-size: 14px; }
+  
+  /* Force all grids with 2 columns to become 1 column */
+  div[style*="gridTemplateColumns"] { grid-template-columns: 1fr !important; }
+  
   .btn { padding: 12px 16px; font-size: 14px; min-height: 44px; min-width: 44px; }
   .input { padding: 14px 12px; font-size: 16px !important; }
   select { font-size: 16px !important; }
