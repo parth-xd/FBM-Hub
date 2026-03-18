@@ -1249,16 +1249,22 @@ function LoginScreen({onLogin}) {
 
       if (!res.ok) {
         setStatus('error');
-        setMessage(data.error || 'Failed to send email');
+        setMessage(data.error || 'Failed to login');
         return;
       }
 
-      if (data.status === 'pending') {
-        setStatus('pending');
-        setMessage('✓ Awaiting admin approval. You\'ll receive an email when approved.');
+      // If we got a sessionToken, user is approved - log them in directly
+      if (data.sessionToken) {
+        window.CURRENT_USER = data.user;
+        window.SESSION_TOKEN = data.sessionToken;
+        localStorage.setItem('sessionToken', data.sessionToken);
+        localStorage.setItem('currentUser', JSON.stringify(data.user));
+        setStatus('success');
+        setMessage('✓ Welcome! Logging you in...');
+        setTimeout(() => onLogin(data.user), 500);
       } else {
-        setStatus('sent');
-        setMessage('✓ Login link sent to ' + email + '. Check your email (15 min expiry).');
+        setStatus('error');
+        setMessage(data.error || 'Could not login');
       }
     } catch (error) {
       setStatus('error');

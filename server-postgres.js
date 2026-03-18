@@ -384,7 +384,7 @@ app.post('/api/auth/request-login', security.validateRequest(security.schemas.em
     const { email } = req.body;
 
     // Check if user exists and is approved
-    const userResult = await pool.query('SELECT id, email, approved FROM users WHERE email = $1', [email]);
+    const userResult = await pool.query('SELECT id, email, approved, role, name FROM users WHERE email = $1', [email]);
     const user = userResult.rows[0];
 
     if (!user) {
@@ -396,7 +396,7 @@ app.post('/api/auth/request-login', security.validateRequest(security.schemas.em
       
       if (pendingRequest.rows.length > 0) {
         return res.status(403).json({ 
-          error: 'Your account is pending approval. The owner will review your signup request shortly.' 
+          error: 'Your signup request is pending. The owner will approve it shortly, then you can login.' 
         });
       }
       
@@ -409,30 +409,35 @@ app.post('/api/auth/request-login', security.validateRequest(security.schemas.em
     if (!user.approved) {
       // User exists but not approved yet
       return res.status(403).json({ 
-        error: 'Your account has not been approved yet. The owner needs to approve your request first.' 
+        error: 'Your account has not been approved yet. Please wait for the owner to approve your request.' 
       });
     }
 
-    // Rate limit per email
-    const recentAttempts = Array.from(loginTokens.values()).filter(
-      t => t.email === email && Date.now() - t.createdAt < 60000
+    // User exists and is approved - generate session token directly
+    console.log(`✅ Login successful for approved user: ${email} (role: ${user.role})`);
+
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret && process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET not configured');
+    }
+
+    const sessionToken = jwt.sign(
+      { email: user.email, role: user.role, name: user.name },
+      jwtSecret || 'dev-secret',
+      { expiresIn: '30d', issuer: 'fbm-hub', audience: 'fbm-hub-client' }
     );
-    if (recentAttempts.length > 3) {
-      return res.status(429).json({ error: 'Too many login attempts. Try again in 1 minute.' });
-    }
 
-    const token = crypto.randomBytes(32).toString('hex');
-    loginTokens.set(token, { email, createdAt: Date.now(), used: false });
-
-    const loginUrl = `${process.env.PUBLIC_URL || 'http://localhost:3000'}/api/auth/verify?token=${token}`;
-    const emailSent = await sendEmail(email, 'Login Link - FBM Operations Hub', `Click here to login: <a href="${loginUrl}">${loginUrl}</a>`);
-    
-    if (!emailSent) {
-      console.error(`⚠️ Email send failed for ${email}`);
-      return res.status(500).json({ error: 'Failed to send email. Check server logs and Resend API configuration.' });
-    }
-
-    res.json({ ok: true, msg: 'Login link sent to email' });
+    res.json({ 
+      ok: true, 
+      msg: 'Login successful',
+      sessionToken,
+      user: {
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        approved: user.approved
+      }
+    });
   } catch (error) {
     console.error('Login request error:', error);
     res.status(500).json({ error: error.message });
