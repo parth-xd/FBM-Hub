@@ -295,7 +295,7 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   .kv .kval { font-size: 13px; }
   
   /* Dashboard grid - stack vertically on mobile */
-  [style*="gridTemplateColumns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
+  div[style*="display: grid"][style*="gridTemplateColumns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
   
   /* Stats bar - compact 2x2 grid */
   [role="statsbar"] { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 4px 12px !important; padding: 6px 12px !important; }
