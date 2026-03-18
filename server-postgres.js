@@ -346,6 +346,36 @@ app.post('/api/auth/request-login', security.validateRequest(security.schemas.em
   try {
     const { email } = req.body;
 
+    // Check if user exists and is approved
+    const userResult = await pool.query('SELECT id, email, approved FROM users WHERE email = $1', [email]);
+    const user = userResult.rows[0];
+
+    if (!user) {
+      // User doesn't exist - check if they have a pending signup request
+      const pendingRequest = await pool.query(
+        'SELECT id FROM role_requests WHERE user_email = $1 AND status = $2',
+        [email, 'pending']
+      );
+      
+      if (pendingRequest.rows.length > 0) {
+        return res.status(403).json({ 
+          error: 'Your account is pending approval. The owner will review your signup request shortly.' 
+        });
+      }
+      
+      // No user and no pending request
+      return res.status(404).json({ 
+        error: 'Email not found. Please sign up first.' 
+      });
+    }
+
+    if (!user.approved) {
+      // User exists but not approved yet
+      return res.status(403).json({ 
+        error: 'Your account has not been approved yet. The owner needs to approve your request first.' 
+      });
+    }
+
     // Rate limit per email
     const recentAttempts = Array.from(loginTokens.values()).filter(
       t => t.email === email && Date.now() - t.createdAt < 60000
