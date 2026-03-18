@@ -252,6 +252,16 @@ const initializeDatabase = async () => {
     }
     console.log('✅ All order columns verified');
 
+    // Add name column to users table for signup system
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255)`);
+      console.log('✅ Users table migration: name column verified');
+    } catch (e) {
+      if (!e.message.includes('already exists')) {
+        console.warn(`⚠️ Could not add name column to users: ${e.message}`);
+      }
+    }
+
     // Create role_requests table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS role_requests (
@@ -454,6 +464,63 @@ app.post('/api/auth/me', async (req, res) => {
     });
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
+// ═══ SIGNUP ENDPOINT (New user registration with approval) ═══
+app.post('/api/auth/signup', security.validateRequest(security.schemas.emailSchema), async (req, res) => {
+  try {
+    const { email, name, role: requested_role } = req.body;
+
+    // Validate inputs
+    if (!email || !name || !requested_role) {
+      return res.status(400).json({ error: 'Email, name, and role are required' });
+    }
+
+    // Validate role
+    const validRoles = ['importer', 'packer'];
+    if (!validRoles.includes(requested_role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be importer or packer.' });
+    }
+
+    // Check if user already exists
+    const existingUser = await pool.query('SELECT email FROM users WHERE email = $1', [email]);
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ error: 'Email already registered. Please login instead.' });
+    }
+
+    // Check if there's already a pending request for this email
+    const existingRequest = await pool.query(
+      `SELECT id FROM role_requests WHERE user_email = $1 AND status = 'pending'`,
+      [email]
+    );
+    if (existingRequest.rows.length > 0) {
+      return res.status(400).json({ error: 'Signup request already pending. Please wait for admin approval.' });
+    }
+
+    // Create role request
+    console.log(`📝 New signup request: ${email} (${name}) requesting ${requested_role} role`);
+    const result = await pool.query(
+      `INSERT INTO role_requests (user_email, user_name, "current_role", requested_role, status)
+       VALUES ($1, $2, $3, $4, 'pending')
+       RETURNING *`,
+      [email, name, 'viewer', requested_role]
+    );
+
+    const newRequest = result.rows[0];
+
+    // Broadcast to owners for notification
+    broadcast('role-request-created', newRequest);
+    console.log(`  ✓ Signup request created (ID: ${newRequest.id})`);
+
+    res.json({ 
+      ok: true, 
+      msg: 'Signup request sent! Awaiting admin approval.',
+      requestId: newRequest.id 
+    });
+  } catch (error) {
+    console.error('Signup error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1163,12 +1230,21 @@ app.post('/api/role-requests/:id/decide', async (req, res) => {
 
     const request = result.rows[0];
 
-    // If approved, update the user's role in the users table
+    // If approved, create or update the user in the users table
     if (decision === 'approved') {
+      console.log(`✅ Approving role request: ${request.user_email} → ${request.requested_role}`);
+      
+      // Try to insert the user if they don't exist, or update their role if they do
       await pool.query(
-        `UPDATE users SET role = $1 WHERE email = $2`,
-        [request.requested_role, request.user_email]
+        `INSERT INTO users (email, name, role, approved, created_at, updated_at)
+         VALUES ($1, $2, $3, TRUE, NOW(), NOW())
+         ON CONFLICT (email) DO UPDATE
+         SET role = $3, approved = TRUE, updated_at = NOW()`,
+        [request.user_email, request.user_name || request.user_email.split('@')[0], request.requested_role]
       );
+      console.log(`  ✓ User ${request.user_email} is now approved with role: ${request.requested_role}`);
+    } else {
+      console.log(`❌ Denying role request: ${request.user_email} → ${request.requested_role}`);
     }
 
     broadcast('role-request-decided', request);
