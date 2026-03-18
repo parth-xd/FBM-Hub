@@ -4762,6 +4762,8 @@ function App() {
             // Fallback: partial update with known fields
             const updated = {
               ...order,
+              po_id: newData.po_id ?? order.po_id,
+              poId: newData.po_id ?? order.poId,
               weight: newData.weight ?? order.weight,
               status: newData.status ?? order.status,
               labelPrinted: newData.label_printed !== undefined ? newData.label_printed : order.labelPrinted,
@@ -4769,7 +4771,8 @@ function App() {
               discrepancy: newData.discrepancy ?? order.discrepancy,
               exceptionReason: newData.exception_reason ?? order.exceptionReason,
               exceptionPOCreated: newData.exception_po_created !== undefined ? newData.exception_po_created : order.exceptionPOCreated,
-              beingEdited: newData.locked_by ? !!newData.locked_by : order.beingEdited
+              beingEdited: newData.locked_by ? !!newData.locked_by : order.beingEdited,
+              lockedGbpUsdRate: newData.locked_gbp_usd_rate ?? order.lockedGbpUsdRate
             };
             updated.colorStatus = calculateColorStatus(updated);
             return updated;
