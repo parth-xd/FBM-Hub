@@ -294,19 +294,19 @@ const OWNER_EMAIL = 'parttthh@gmail.com';
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.GMAIL_USER || 'spbawr@gmail.com',
-    pass: process.env.GMAIL_APP_PASSWORD || ''
+    user: process.env.EMAIL_USER || process.env.GMAIL_USER || 'spbawr@gmail.com',
+    pass: process.env.EMAIL_PASSWORD || process.env.GMAIL_APP_PASSWORD || ''
   }
 });
 
 const sendEmail = async (to, subject, html) => {
   try {
-    if (!process.env.GMAIL_APP_PASSWORD) {
-      console.warn('⚠️  GMAIL_APP_PASSWORD not configured. Email not sent to:', to);
+    if (!process.env.EMAIL_PASSWORD && !process.env.GMAIL_APP_PASSWORD) {
+      console.warn('⚠️  EMAIL_PASSWORD or GMAIL_APP_PASSWORD not configured. Email not sent to:', to);
       return false;
     }
 
-    const fromAddress = process.env.EMAIL_FROM || `FBM Hub <${process.env.GMAIL_USER || 'spbawr@gmail.com'}>`;
+    const fromAddress = process.env.EMAIL_FROM || `FBM Hub <${process.env.EMAIL_USER || process.env.GMAIL_USER || 'spbawr@gmail.com'}>`;
     console.log(`📧 Attempting to send email to ${to} from ${fromAddress}`);
 
     const info = await transporter.sendMail({
