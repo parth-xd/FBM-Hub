@@ -4749,17 +4749,20 @@ function App() {
           // Real-time update from another user — server sends full order row
           const { id, updatedBy, ...newData } = message.data;
           console.log(`🔄 Real-time update from ${updatedBy}:`, Object.keys(newData).length, 'fields');
+          console.log(`   Has order_id:`, !!newData.order_id, '| Fields:', Object.keys(newData).slice(0, 8).join(', '));
           
           setOrders(prev => prev.map(order => {
             if (order.id !== id) return order;
             // If server sent full row (has order_id), remap entirely
             if (newData.order_id) {
+              console.log(`   ✓ Full row received, remapping order ${id}`);
               const remapped = mapDbOrderToFrontend(newData);
               remapped.id = id;
               remapped.colorStatus = calculateColorStatus(remapped);
               return remapped;
             }
             // Fallback: partial update with known fields
+            console.log(`   ⚠ Partial update fallback for order ${id}`);
             const updated = {
               ...order,
               po_id: newData.po_id ?? order.po_id,
