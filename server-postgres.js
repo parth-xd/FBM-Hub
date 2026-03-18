@@ -424,7 +424,11 @@ app.get('/api/auth/verify', async (req, res) => {
 
     loginTokens.set(token, { ...loginData, used: true });
 
-    res.json({ ok: true, sessionToken });
+    // Refresh user from database to get current data
+    const updatedUser = await pool.query('SELECT email, name, role, approved FROM users WHERE email = $1', [email]);
+    const userData = updatedUser.rows[0] || { email, role: 'viewer', approved: false };
+
+    res.json({ ok: true, sessionToken, user: userData });
   } catch (error) {
     console.error('Verification error:', error);
     // Don't expose error details
