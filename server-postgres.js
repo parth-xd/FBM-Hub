@@ -296,6 +296,23 @@ const transporter = nodemailer.createTransport({
   auth: {
     user: process.env.EMAIL_USER || process.env.GMAIL_USER || 'spbawr@gmail.com',
     pass: process.env.EMAIL_PASSWORD || process.env.GMAIL_APP_PASSWORD || ''
+  },
+  connectionTimeout: 10000,
+  socketTimeout: 10000,
+  pool: {
+    maxConnections: 5,
+    maxMessages: 100,
+    rateDelta: 1000,
+    rateLimit: 10
+  }
+});
+
+// Verify transporter on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ Gmail SMTP verification failed:', error.message);
+  } else {
+    console.log('✅ Gmail SMTP transporter verified and ready');
   }
 });
 
@@ -310,12 +327,19 @@ const sendEmail = async (to, subject, html) => {
     console.log(`📧 Attempting to send email to ${to} from ${fromAddress}`);
     console.log(`📧 Using Gmail user: ${process.env.EMAIL_USER || 'spbawr@gmail.com'}`);
 
-    const info = await transporter.sendMail({
+    // Wrap with timeout
+    const emailPromise = transporter.sendMail({
       from: fromAddress,
       to,
       subject,
       html,
     });
+
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Email send timeout after 15 seconds')), 15000)
+    );
+
+    const info = await Promise.race([emailPromise, timeoutPromise]);
 
     console.log(`✅ Email sent successfully to ${to}`);
     console.log(`   Message ID: ${info.messageId}`);
