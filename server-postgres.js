@@ -278,6 +278,42 @@ const initializeDatabase = async () => {
     `);
 
     console.log('✅ Database tables created successfully');
+
+    // ═══ ONE-TIME FIX: Correct order dates that are in the future ═══
+    // If order_date is more than 30 days in the future, it's almost certainly wrong — subtract 1 year
+    try {
+      const futureThreshold = new Date();
+      futureThreshold.setDate(futureThreshold.getDate() + 30);
+      const fixResult = await pool.query(
+        `UPDATE orders SET order_date = order_date - INTERVAL '1 year'
+         WHERE order_date > $1 AND order_date IS NOT NULL`,
+        [futureThreshold.toISOString().split('T')[0]]
+      );
+      if (fixResult.rowCount > 0) {
+        console.log(`🔧 Fixed ${fixResult.rowCount} orders with future dates (subtracted 1 year)`);
+      }
+
+      // Also fix ship_by_date and delivery_date if they're way in the future
+      const fixShip = await pool.query(
+        `UPDATE orders SET ship_by_date = ship_by_date - INTERVAL '1 year'
+         WHERE ship_by_date > $1 AND ship_by_date IS NOT NULL`,
+        [futureThreshold.toISOString().split('T')[0]]
+      );
+      if (fixShip.rowCount > 0) {
+        console.log(`🔧 Fixed ${fixShip.rowCount} orders with future ship_by_date`);
+      }
+
+      const fixDelivery = await pool.query(
+        `UPDATE orders SET delivery_date = delivery_date - INTERVAL '1 year'
+         WHERE delivery_date > $1 AND delivery_date IS NOT NULL`,
+        [futureThreshold.toISOString().split('T')[0]]
+      );
+      if (fixDelivery.rowCount > 0) {
+        console.log(`🔧 Fixed ${fixDelivery.rowCount} orders with future delivery_date`);
+      }
+    } catch (e) {
+      console.warn('⚠️ Date fix migration error (non-critical):', e.message);
+    }
   } catch (err) {
     console.error('❌ Database initialization error:', err.message);
   }
@@ -673,6 +709,12 @@ app.get('/api/orders', async (req, res) => {
       try {
         const d = new Date(dateVal);
         if (isNaN(d.getTime())) return null;
+        // If date is more than 30 days in the future, it's likely a year off
+        const future = new Date();
+        future.setDate(future.getDate() + 30);
+        if (d > future) {
+          d.setFullYear(d.getFullYear() - 1);
+        }
         return d.toISOString().split('T')[0];
       } catch {
         return null;
