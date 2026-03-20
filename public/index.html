@@ -1215,24 +1215,6 @@ function LoginScreen({onLogin}) {
     e.preventDefault();
     if (!email) return;
 
-    // ⚡ TEAM AUTO-LOGIN — Check if email matches any account in team roster
-    const savedAccs = (()=>{try{const s=localStorage.getItem('fbm_accounts');return s?JSON.parse(s):DEFAULT_ACCOUNTS;}catch{return DEFAULT_ACCOUNTS;}})();
-    const matchedAccount = savedAccs.find(a => a.email && a.email.toLowerCase() === email.toLowerCase().trim());
-    if (matchedAccount) {
-      const user = {
-        email: matchedAccount.email.toLowerCase(),
-        name: matchedAccount.name || matchedAccount.email,
-        role: matchedAccount.role || 'importer',
-        loginTime: new Date().toISOString()
-      };
-      window.CURRENT_USER = user;
-      window.SESSION_TOKEN = 'team-session-' + Date.now();
-      localStorage.setItem('sessionToken', window.SESSION_TOKEN);
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      onLogin(user);
-      return;
-    }
-
     setStatus('sending');
     setMessage('');
 
