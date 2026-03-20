@@ -569,6 +569,7 @@ const API = {
   // Admin endpoints
   approveUser: () => `${API.base()}/api/admin/approve-user`,
   syncAccounts: () => `${API.base()}/api/admin/sync-accounts`,
+  getUsers: () => `${API.base()}/api/users`,
   auditLogs: () => `${API.base()}/api/audit-logs`,
   
   // Schema - Single source of truth for all columns
@@ -3004,6 +3005,35 @@ function RoleRequestsPanel({onDecision}) {
 function UserManageModal({accounts,onSave,onClose}) {
   const [accs,setAccs]=useState(accounts.map(a=>({...a})));
   const [n,setN]=useState({name:'',email:'',role:'packer'});
+  const [loading, setLoading] = useState(false);
+  
+  // Load approved users from database on mount
+  React.useEffect(() => {
+    async function loadDatabaseUsers() {
+      setLoading(true);
+      try {
+        const res = await fetch(API.getUsers());
+        if (res.ok) {
+          const data = await res.json();
+          if (data.users && data.users.length > 0) {
+            // Set users from database
+            setAccs(data.users.map(u => ({
+              id: `db_${u.email}`,
+              name: u.name || u.email,
+              email: u.email,
+              role: u.role,
+              approved: u.approved,
+              lastUpdated: new Date(u.updated_at).toLocaleString()
+            })));
+          }
+        }
+      } catch (err) {
+        console.error('Error loading users:', err);
+      }
+      setLoading(false);
+    }
+    loadDatabaseUsers();
+  }, []);
   
   // Listen for new approved users from WebSocket
   React.useEffect(() => {
@@ -3017,7 +3047,9 @@ function UserManageModal({accounts,onSave,onClose}) {
           id: `user_${newUser.email}`,
           name: newUser.name || newUser.email,
           email: newUser.email,
-          role: newUser.role
+          role: newUser.role,
+          approved: true,
+          lastUpdated: new Date().toLocaleString()
         }]);
       }
     }
@@ -3051,30 +3083,46 @@ function UserManageModal({accounts,onSave,onClose}) {
               <div style={{color:'#86868b',fontSize:12,padding:'14px',background:'#f5f5f7',borderRadius:12}}>No accounts yet. Add one below.</div>
             ):(
               <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                {accs.map((a,i)=>(
-                  <div key={a.id} style={{background:'#f5f5f7',borderRadius:12,padding:'14px',display:'grid',gap:10,gridTemplateColumns:'1fr 1fr 1fr auto'}}>
-                    <div>
-                      <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Name</label>
-                      <input className="input" style={{padding:'8px 10px',fontSize:12,width:'100%'}} value={a.name} onChange={e=>handleUpdateAccount(i,'name',e.target.value)} placeholder="Full Name"/>
+                {accs.map((a,i)=>{
+                  // Check if user was active in last 24 hours
+                  const lastUpdated = a.lastUpdated ? new Date(a.lastUpdated) : null;
+                  const now = new Date();
+                  const hoursAgo = lastUpdated ? (now - lastUpdated) / (1000 * 60 * 60) : null;
+                  const isActive = hoursAgo !== null && hoursAgo < 24;
+                  
+                  return (
+                  <div key={a.id} style={{background:'#f5f5f7',borderRadius:12,padding:'14px',display:'flex',flexDirection:'column',gap:10}}>
+                    <div style={{display:'grid',gap:10,gridTemplateColumns:'1fr 1fr 1fr auto'}}>
+                      <div>
+                        <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Name</label>
+                        <input className="input" style={{padding:'8px 10px',fontSize:12,width:'100%'}} value={a.name} onChange={e=>handleUpdateAccount(i,'name',e.target.value)} placeholder="Full Name"/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Email</label>
+                        <input className="input" type="email" style={{padding:'8px 10px',fontSize:12,width:'100%'}} value={a.email||''} onChange={e=>handleUpdateAccount(i,'email',e.target.value)} placeholder="email@example.com"/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Role</label>
+                        <select value={a.role} onChange={e=>handleUpdateAccount(i,'role',e.target.value)} className="input" style={{padding:'8px 10px',fontSize:12,width:'100%'}}>
+                          <option value="owner">Owner</option>
+                          <option value="importer">Importer</option>
+                          <option value="packer">Packer</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                      </div>
+                      <div style={{display:'flex',alignItems:'flex-end'}}>
+                        <button onClick={()=>handleRemoveAccount(i)} style={{background:'#fff5f5',border:'none',color:'#ff3b30',borderRadius:20,padding:'8px 14px',cursor:'pointer',fontSize:12,fontWeight:600}}>Remove</button>
+                      </div>
                     </div>
-                    <div>
-                      <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Email</label>
-                      <input className="input" type="email" style={{padding:'8px 10px',fontSize:12,width:'100%'}} value={a.email||''} onChange={e=>handleUpdateAccount(i,'email',e.target.value)} placeholder="email@example.com"/>
-                    </div>
-                    <div>
-                      <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Role</label>
-                      <select value={a.role} onChange={e=>handleUpdateAccount(i,'role',e.target.value)} className="input" style={{padding:'8px 10px',fontSize:12,width:'100%'}}>
-                        <option value="owner">Owner</option>
-                        <option value="importer">Importer</option>
-                        <option value="packer">Packer</option>
-                        <option value="viewer">Viewer</option>
-                      </select>
-                    </div>
-                    <div style={{display:'flex',alignItems:'flex-end'}}>
-                      <button onClick={()=>handleRemoveAccount(i)} style={{background:'#fff5f5',border:'none',color:'#ff3b30',borderRadius:20,padding:'8px 14px',cursor:'pointer',fontSize:12,fontWeight:600}}>Remove</button>
-                    </div>
+                    {a.lastUpdated && (
+                      <div style={{fontSize:11,color:isActive?'#34c759':'#86868b',display:'flex',alignItems:'center',gap:6}}>
+                        <span style={{width:8,height:8,borderRadius:'50%',background:isActive?'#34c759':'#d0d0d0',flexShrink:0}}/>
+                        {isActive ? '🟢 Active' : '⚪ Inactive'} • Last seen: {a.lastUpdated}
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

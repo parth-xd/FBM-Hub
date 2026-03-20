@@ -416,6 +416,9 @@ app.post('/api/auth/request-login', security.validateRequest(security.schemas.em
     // User exists and is approved - generate session token directly
     console.log(`✅ Login successful for approved user: ${email} (role: ${user.role})`);
 
+    // Update last login timestamp
+    await pool.query('UPDATE users SET updated_at = NOW() WHERE email = $1', [email]);
+
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret && process.env.NODE_ENV === 'production') {
       throw new Error('JWT_SECRET not configured');
@@ -1175,6 +1178,20 @@ app.post('/api/admin/sync-accounts', async (req, res) => {
     }
   } catch (error) {
     console.error('Sync accounts error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all approved users from database
+app.get('/api/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT email, name, role, approved, created_at, updated_at FROM users 
+       WHERE approved = TRUE ORDER BY updated_at DESC`
+    );
+    res.json({ users: result.rows });
+  } catch (error) {
+    console.error('Get users error:', error);
     res.status(500).json({ error: error.message });
   }
 });
