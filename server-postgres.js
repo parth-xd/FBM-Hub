@@ -1196,6 +1196,42 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
+// Delete/revoke user access
+app.delete('/api/users/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const ownerEmail = req.headers['x-user-email'] || '';
+    
+    // Only owner can delete users
+    const ownerResult = await pool.query('SELECT role FROM users WHERE email = $1', [ownerEmail]);
+    if (ownerResult.rows[0]?.role !== 'owner') {
+      return res.status(403).json({ error: 'Only owner can delete users' });
+    }
+    
+    // Prevent owner from deleting themselves
+    if (email.toLowerCase() === ownerEmail.toLowerCase()) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+    
+    // Mark user as not approved (revokes access)
+    const result = await pool.query(
+      `UPDATE users SET approved = FALSE, updated_at = NOW() WHERE email = $1 RETURNING *`,
+      [email]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`🗑️ User deleted/revoked: ${email}`);
+    broadcast('user-deleted', { email });
+    res.json({ ok: true, user: result.rows[0] });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ═══ AUDIT LOG ═══
 
 app.get('/api/audit-logs', async (req, res) => {

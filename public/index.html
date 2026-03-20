@@ -570,6 +570,7 @@ const API = {
   approveUser: () => `${API.base()}/api/admin/approve-user`,
   syncAccounts: () => `${API.base()}/api/admin/sync-accounts`,
   getUsers: () => `${API.base()}/api/users`,
+  deleteUser: (email) => `${API.base()}/api/users/${encodeURIComponent(email)}`,
   auditLogs: () => `${API.base()}/api/audit-logs`,
   
   // Schema - Single source of truth for all columns
@@ -3053,8 +3054,21 @@ function UserManageModal({accounts,onSave,onClose}) {
         }]);
       }
     }
+    
+    function handleUserDeleted(event) {
+      const deletedEmail = event.detail?.email;
+      if (deletedEmail) {
+        // Remove deleted user from the list
+        setAccs(prev => prev.filter(a => a.email !== deletedEmail));
+      }
+    }
+    
     window.addEventListener('user-approved', handleUserApproved);
-    return () => window.removeEventListener('user-approved', handleUserApproved);
+    window.addEventListener('user-deleted', handleUserDeleted);
+    return () => {
+      window.removeEventListener('user-approved', handleUserApproved);
+      window.removeEventListener('user-deleted', handleUserDeleted);
+    };
   }, [accs]);
   
   const handleUpdateAccount = (i, field, value) => {
@@ -3063,8 +3077,32 @@ function UserManageModal({accounts,onSave,onClose}) {
     setAccs(c);
   };
   
-  const handleRemoveAccount = (i) => {
-    setAccs(p=>p.filter((_,j)=>j!==i));
+  const handleRemoveAccount = async (i) => {
+    const userToDelete = accs[i];
+    if (!userToDelete?.email) return;
+    
+    // Confirm deletion
+    if (!confirm(`Delete ${userToDelete.name || userToDelete.email}? They will no longer be able to access the platform.`)) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(API.deleteUser(userToDelete.email), {
+        method: 'DELETE',
+        headers: {'x-user-email': window.CURRENT_USER?.email || ''}
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        alert('Error deleting user: ' + data.error);
+        return;
+      }
+      
+      // Remove from UI after successful deletion
+      setAccs(p=>p.filter((_,j)=>j!==i));
+    } catch (err) {
+      alert('Failed to delete user: ' + err.message);
+    }
   };
 
   return (
@@ -4983,6 +5021,21 @@ function App() {
           // Show toast notification
           if (role === 'owner') {
             setWriteToast({ok: true, msg: `✅ User ${newUser.name || newUser.email} approved as ${ROLES[newUser.role]?.label || newUser.role}`});
+            setTimeout(() => setWriteToast(null), 4000);
+          }
+        }
+
+        if (message.type === 'user-deleted') {
+          // A user was deleted/revoked by owner
+          const deletedUser = message.data;
+          console.log(`🗑️ User deleted: ${deletedUser.email}`);
+          
+          // Dispatch event so UserManageModal can update
+          window.dispatchEvent(new CustomEvent('user-deleted', { detail: deletedUser }));
+          
+          // Show toast notification
+          if (role === 'owner') {
+            setWriteToast({ok: true, msg: `🗑️ User ${deletedUser.email} has been removed`});
             setTimeout(() => setWriteToast(null), 4000);
           }
         }
