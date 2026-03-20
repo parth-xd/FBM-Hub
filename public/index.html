@@ -2351,6 +2351,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
 function RevenueBreakdownModal({orders, onClose}) {
   const [view, setView] = React.useState('monthly'); // 'daily' | 'weekly' | 'monthly'
   const [tab, setTab] = React.useState('breakdown'); // 'breakdown' | 'projected' | 'products'
+  const [productSort, setProductSort] = React.useState('count'); // 'count' | 'revenue' | 'profit'
 
   const analysis = React.useMemo(() => {
     const parseNum = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
@@ -2386,10 +2387,21 @@ function RevenueBreakdownModal({orders, onClose}) {
       if (!monthly[monthKey]) monthly[monthKey] = {rev:0, profit:0, cost:0, count:0};
       monthly[monthKey].rev += rev; monthly[monthKey].profit += profit; monthly[monthKey].cost += cost; monthly[monthKey].count++;
 
-      // ASIN aggregation
-      const asin = o.asin || 'Unknown';
-      if (!asinMap[asin]) asinMap[asin] = {asin, name: o.productName || 'Unknown', rev:0, profit:0, count:0};
-      asinMap[asin].rev += rev; asinMap[asin].profit += profit; asinMap[asin].count++;
+    });
+
+    // ASIN/Product aggregation — uses ALL orders, not just those with dates
+    const productMap = {};
+    orders.forEach(o => {
+      const rev = parseNum(o.totalSellPrice);
+      const profit = parseNum(o.expectedProfit);
+      // Group by ASIN if available, otherwise by product name
+      const asin = o.asin && o.asin.trim() ? o.asin.trim() : null;
+      const name = o.productName && o.productName.trim() ? o.productName.trim() : 'Unknown';
+      const key = asin || name;
+      if (!productMap[key]) productMap[key] = {asin: asin || '—', name, rev:0, profit:0, count:0, key};
+      productMap[key].rev += rev; productMap[key].profit += profit; productMap[key].count++;
+      // Use the longest product name for display
+      if (name.length > productMap[key].name.length) productMap[key].name = name;
     });
 
     // Sort each by key descending (most recent first)
@@ -2397,8 +2409,8 @@ function RevenueBreakdownModal({orders, onClose}) {
     const weeklyArr = Object.entries(weekly).sort((a,b) => b[0].localeCompare(a[0]));
     const monthlyArr = Object.entries(monthly).sort((a,b) => b[0].localeCompare(a[0]));
 
-    // Top products by revenue
-    const topProducts = Object.values(asinMap).sort((a,b) => b.rev - a.rev).slice(0, 20);
+    // All products (unsorted — sorted in render based on user toggle)
+    const topProducts = Object.values(productMap);
 
     // Growth projection from monthly data (need at least 2 months)
     const monthlyChron = [...monthlyArr].reverse(); // oldest first
@@ -2447,7 +2459,11 @@ function RevenueBreakdownModal({orders, onClose}) {
 
   const currentData = view === 'daily' ? analysis.dailyArr : view === 'weekly' ? analysis.weeklyArr : analysis.monthlyArr;
   const maxRev = currentData.length > 0 ? Math.max(...currentData.map(([,d]) => d.rev)) : 1;
-  const maxProductRev = analysis.topProducts.length > 0 ? analysis.topProducts[0].rev : 1;
+  const sortedProducts = React.useMemo(() => {
+    const sorted = [...analysis.topProducts].sort((a,b) => productSort === 'count' ? b.count - a.count : productSort === 'profit' ? b.profit - a.profit : b.rev - a.rev);
+    return sorted.slice(0, 30);
+  }, [analysis.topProducts, productSort]);
+  const maxProductVal = sortedProducts.length > 0 ? (productSort === 'count' ? sortedProducts[0].count : productSort === 'profit' ? Math.max(...sortedProducts.map(p => Math.abs(p.profit)), 1) : sortedProducts[0].rev) : 1;
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{zIndex:9999}}>
@@ -2636,30 +2652,44 @@ function RevenueBreakdownModal({orders, onClose}) {
 
           {/* ── TAB 3: Top Products by ASIN ── */}
           {tab === 'products' && <>
-            <div style={{fontSize:11, color:'#86868b', marginBottom:16}}>Top selling products ranked by revenue</div>
+            {/* Sort toggle */}
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16}}>
+              <div style={{fontSize:11, color:'#86868b'}}>Top products · {sortedProducts.length} of {analysis.topProducts.length} shown</div>
+              <div style={{display:'flex', gap:4, background:'rgba(0,0,0,0.04)', borderRadius:10, padding:3}}>
+                {[{key:'count',label:'Most Sold'},{key:'revenue',label:'Top Revenue'},{key:'profit',label:'Top Profit'}].map(s => (
+                  <button key={s.key} onClick={() => setProductSort(s.key)} style={{
+                    padding:'6px 14px', fontSize:11, fontWeight:productSort===s.key?600:400, color:productSort===s.key?'#fff':'#86868b',
+                    background:productSort===s.key?'#0071e3':'transparent', border:'none', borderRadius:8, cursor:'pointer', transition:'all 0.2s'
+                  }}>{s.label}</button>
+                ))}
+              </div>
+            </div>
 
-            {analysis.topProducts.length > 0 ? (
+            {sortedProducts.length > 0 ? (
               <div style={{display:'flex', flexDirection:'column', gap:2}}>
-                {analysis.topProducts.map((p, i) => (
-                  <div key={p.asin} style={{display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+                {sortedProducts.map((p, i) => {
+                  const barVal = productSort === 'count' ? p.count : productSort === 'profit' ? Math.abs(p.profit) : p.rev;
+                  return (
+                  <div key={p.key} style={{display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
                     <div style={{width:28, height:28, borderRadius:8, background:i<3?'#0071e3':'rgba(0,0,0,0.06)', color:i<3?'#fff':'#86868b', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, flexShrink:0}}>{i+1}</div>
-                    <div style={{flex:1, minWidth:0}}>
+                    <div style={{flex:'1 1 0', minWidth:0}}>
                       <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{p.name}</div>
                       <div style={{fontSize:11, color:'#86868b', fontFamily:'IBM Plex Mono', marginTop:2}}>{p.asin}</div>
                     </div>
-                    <div style={{flex:1, height:20, background:'rgba(0,0,0,0.03)', borderRadius:5, overflow:'hidden'}}>
-                      <div style={{height:'100%', width:`${(p.rev / maxProductRev) * 100}%`, background:'linear-gradient(90deg, #0071e3, #5ac8fa)', borderRadius:5}}/>
+                    <div style={{flex:'0 0 120px', height:20, background:'rgba(0,0,0,0.03)', borderRadius:5, overflow:'hidden'}}>
+                      <div style={{height:'100%', width:`${(barVal / maxProductVal) * 100}%`, background:productSort==='profit'?(p.profit>=0?'linear-gradient(90deg, #34c759, #30d158)':'linear-gradient(90deg, #ff3b30, #ff6961)'):'linear-gradient(90deg, #0071e3, #5ac8fa)', borderRadius:5}}/>
                     </div>
-                    <div style={{width:80, textAlign:'right'}}>
-                      <div style={{fontFamily:'IBM Plex Mono', fontSize:13, fontWeight:600, color:'#34c759'}}>${p.rev.toFixed(0)}</div>
+                    <div style={{width:55, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:13, fontWeight:700, color:'#0071e3'}}>{p.count}×</div>
+                    <div style={{width:70, textAlign:'right'}}>
+                      <div style={{fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:600, color:'#34c759'}}>${p.rev.toFixed(0)}</div>
                       <div style={{fontFamily:'IBM Plex Mono', fontSize:10, color:p.profit>=0?'#0071e3':'#ff3b30'}}>P: ${p.profit.toFixed(0)}</div>
                     </div>
-                    <div style={{width:40, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:'#86868b'}}>{p.count}×</div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
-              <div style={{textAlign:'center', color:'#86868b', padding:40, fontSize:14}}>No ASIN data found in orders</div>
+              <div style={{textAlign:'center', color:'#86868b', padding:40, fontSize:14}}>No product data found in orders</div>
             )}
           </>}
         </div>
