@@ -2698,9 +2698,246 @@ function RevenueBreakdownModal({orders, onClose}) {
   );
 }
 
+/* ═══ COST ANALYSIS MODAL ═══ */
+function CostAnalysisModal({orders, onClose}) {
+  const [tab, setTab] = React.useState('expensive'); // 'expensive' | 'value' | 'suppliers' | 'importers'
+  const [sortDir, setSortDir] = React.useState('desc');
+
+  const analysis = React.useMemo(() => {
+    const pn = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+
+    // Filter orders with cost data
+    const withCost = orders.filter(o => pn(o.totalBuyPriceIncVAT) > 0);
+    const totalCost = withCost.reduce((s, o) => s + pn(o.totalBuyPriceIncVAT), 0);
+    const totalShipping = orders.reduce((s, o) => s + pn(o.shippingCostGBP), 0);
+    const totalProfit = withCost.reduce((s, o) => s + pn(o.expectedProfit), 0);
+    const avgCost = withCost.length > 0 ? totalCost / withCost.length : 0;
+
+    // Most expensive orders
+    const expensive = [...withCost]
+      .sort((a, b) => pn(b.totalBuyPriceIncVAT) - pn(a.totalBuyPriceIncVAT))
+      .slice(0, 30);
+
+    // Best value: cheapest orders with best profit margin (profit/cost ratio)
+    const bestValue = [...withCost]
+      .map(o => ({
+        ...o,
+        _cost: pn(o.totalBuyPriceIncVAT),
+        _profit: pn(o.expectedProfit),
+        _margin: pn(o.totalBuyPriceIncVAT) > 0 ? (pn(o.expectedProfit) / pn(o.totalBuyPriceIncVAT)) * 100 : 0,
+        _rev: pn(o.totalSellPrice)
+      }))
+      .filter(o => o._profit > 0 && o._cost > 0)
+      .sort((a, b) => b._margin - a._margin)
+      .slice(0, 30);
+
+    // Worst value: orders losing money or very low margin
+    const worstValue = [...withCost]
+      .map(o => ({
+        ...o,
+        _cost: pn(o.totalBuyPriceIncVAT),
+        _profit: pn(o.expectedProfit),
+        _margin: pn(o.totalBuyPriceIncVAT) > 0 ? (pn(o.expectedProfit) / pn(o.totalBuyPriceIncVAT)) * 100 : 0,
+      }))
+      .filter(o => o._cost > 0)
+      .sort((a, b) => a._margin - b._margin)
+      .slice(0, 30);
+
+    // By supplier
+    const supplierMap = {};
+    orders.forEach(o => {
+      const s = getSupplier(o.buyLink);
+      if (!supplierMap[s.name]) supplierMap[s.name] = {name: s.name, color: s.color, cost:0, profit:0, shipping:0, count:0, rev:0};
+      supplierMap[s.name].cost += pn(o.totalBuyPriceIncVAT);
+      supplierMap[s.name].profit += pn(o.expectedProfit);
+      supplierMap[s.name].shipping += pn(o.shippingCostGBP);
+      supplierMap[s.name].rev += pn(o.totalSellPrice);
+      supplierMap[s.name].count++;
+    });
+    const suppliers = Object.values(supplierMap).sort((a,b) => b.cost - a.cost);
+
+    // By importer
+    const importerMap = {};
+    orders.forEach(o => {
+      const k = o.purchasedBy || 'Unknown';
+      if (!importerMap[k]) importerMap[k] = {name: k, cost:0, profit:0, shipping:0, count:0, rev:0};
+      importerMap[k].cost += pn(o.totalBuyPriceIncVAT);
+      importerMap[k].profit += pn(o.expectedProfit);
+      importerMap[k].shipping += pn(o.shippingCostGBP);
+      importerMap[k].rev += pn(o.totalSellPrice);
+      importerMap[k].count++;
+    });
+    const importers = Object.values(importerMap)
+      .filter(i => !['In Stock @ Bletchley','Order Cancellation Flow','Ordered for INS'].includes(i.name))
+      .sort((a,b) => b.cost - a.cost);
+
+    return {totalCost, totalShipping, totalProfit, avgCost, withCost, expensive, bestValue, worstValue, suppliers, importers};
+  }, [orders]);
+
+  const maxExpCost = analysis.expensive.length > 0 ? parseFloat(analysis.expensive[0].totalBuyPriceIncVAT) || 1 : 1;
+  const maxSupCost = analysis.suppliers.length > 0 ? analysis.suppliers[0].cost : 1;
+  const maxImpCost = analysis.importers.length > 0 ? analysis.importers[0].cost : 1;
+
+  const OrderRow = ({o, i, showMargin}) => {
+    const cost = parseFloat(o.totalBuyPriceIncVAT) || 0;
+    const profit = parseFloat(o.expectedProfit) || 0;
+    const rev = parseFloat(o.totalSellPrice) || 0;
+    const margin = cost > 0 ? (profit / cost * 100) : 0;
+    return (
+      <div style={{display:'flex', alignItems:'center', gap:8, padding:'9px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+        <div style={{width:26, height:26, borderRadius:7, background:i<3?'#ff3b30':i<10?'rgba(255,59,48,0.12)':'rgba(0,0,0,0.05)', color:i<3?'#fff':i<10?'#ff3b30':'#86868b', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, flexShrink:0}}>{i+1}</div>
+        <div style={{flex:'1 1 0', minWidth:0}}>
+          <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{o.productName || 'Unknown'}</div>
+          <div style={{fontSize:10, color:'#86868b', fontFamily:'IBM Plex Mono', marginTop:1}}>…{(o.orderId||'').slice(-14)}</div>
+        </div>
+        <div style={{width:70, textAlign:'right'}}>
+          <div style={{fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:'#ff3b30'}}>£{cost.toFixed(0)}</div>
+          <div style={{fontSize:10, color:'#86868b'}}>cost</div>
+        </div>
+        <div style={{width:65, textAlign:'right'}}>
+          <div style={{fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:600, color:profit>=0?'#34c759':'#ff3b30'}}>${profit.toFixed(0)}</div>
+          <div style={{fontSize:10, color:'#86868b'}}>profit</div>
+        </div>
+        {showMargin && <div style={{width:55, textAlign:'right'}}>
+          <div style={{fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:margin>50?'#34c759':margin>20?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
+          <div style={{fontSize:10, color:'#86868b'}}>ROI</div>
+        </div>}
+        <div style={{width:60, textAlign:'right', fontSize:11, color:'#86868b', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{(o.purchasedBy||'—').split(' ')[0]}</div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{zIndex:9999}}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{maxWidth:920, width:'95vw', maxHeight:'90vh', display:'flex', flexDirection:'column'}}>
+        {/* Header */}
+        <div style={{padding:'20px 24px 0', borderBottom:'1px solid rgba(0,0,0,0.06)'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+            <div>
+              <div style={{fontSize:19, fontWeight:700, color:'#1d1d1f', letterSpacing:'-0.02em'}}>Cost Analysis</div>
+              <div style={{fontSize:13, color:'#86868b', marginTop:4}}>Total: <span style={{color:'#ff3b30', fontWeight:600}}>£{analysis.totalCost.toFixed(0)}</span> across {analysis.withCost.length} orders · Avg: <span style={{fontWeight:600}}>£{analysis.avgCost.toFixed(0)}</span>/order</div>
+            </div>
+            <button onClick={onClose} style={{width:32, height:32, borderRadius:16, border:'none', background:'rgba(0,0,0,0.06)', cursor:'pointer', fontSize:16, color:'#86868b', display:'flex', alignItems:'center', justifyContent:'center'}}>×</button>
+          </div>
+
+          {/* Tab bar */}
+          <div style={{display:'flex', gap:0, overflowX:'auto'}}>
+            {[
+              {key:'expensive', label:'Most Expensive'},
+              {key:'value', label:'Best ROI'},
+              {key:'worst', label:'Worst ROI'},
+              {key:'suppliers', label:'By Supplier'},
+              {key:'importers', label:'By Importer'},
+            ].map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                padding:'10px 16px', fontSize:13, fontWeight:tab===t.key?600:400, color:tab===t.key?'#0071e3':'#86868b',
+                background:'none', border:'none', borderBottom:tab===t.key?'2px solid #0071e3':'2px solid transparent',
+                cursor:'pointer', transition:'all 0.2s', letterSpacing:'-0.01em', whiteSpace:'nowrap'
+              }}>{t.label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{flex:1, overflowY:'auto', padding:'20px 24px'}}>
+
+          {/* Summary cards */}
+          <div style={{display:'flex', gap:10, marginBottom:20, flexWrap:'wrap'}}>
+            {[
+              {l:'Total Buy Cost', v:`£${analysis.totalCost.toFixed(0)}`, c:'#ff3b30'},
+              {l:'Shipping Cost', v:`£${analysis.totalShipping.toFixed(0)}`, c:'#ff9f0a'},
+              {l:'Total Profit', v:`$${analysis.totalProfit.toFixed(0)}`, c:analysis.totalProfit>=0?'#34c759':'#ff3b30'},
+              {l:'Avg Cost/Order', v:`£${analysis.avgCost.toFixed(1)}`, c:'#0071e3'},
+            ].map(s => (
+              <div key={s.l} style={{flex:'1 1 130px', background:'rgba(0,0,0,0.02)', borderRadius:12, padding:'12px 16px'}}>
+                <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>{s.l}</div>
+                <div style={{fontSize:17, fontWeight:700, color:s.c, fontFamily:'IBM Plex Mono'}}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── TAB: Most Expensive ── */}
+          {tab === 'expensive' && <>
+            <div style={{fontSize:11, color:'#86868b', marginBottom:12}}>Orders with highest buy cost</div>
+            {analysis.expensive.map((o, i) => <OrderRow key={o.id || i} o={o} i={i} showMargin={false}/>)}
+          </>}
+
+          {/* ── TAB: Best ROI ── */}
+          {tab === 'value' && <>
+            <div style={{fontSize:11, color:'#86868b', marginBottom:12}}>Cheapest orders with highest profit-to-cost ratio (ROI)</div>
+            {analysis.bestValue.map((o, i) => <OrderRow key={o.id || i} o={o} i={i} showMargin={true}/>)}
+            {analysis.bestValue.length === 0 && <div style={{textAlign:'center', color:'#86868b', padding:40}}>No profitable orders found</div>}
+          </>}
+
+          {/* ── TAB: Worst ROI ── */}
+          {tab === 'worst' && <>
+            <div style={{fontSize:11, color:'#86868b', marginBottom:12}}>Orders with lowest or negative profit-to-cost ratio — money losers</div>
+            {analysis.worstValue.map((o, i) => {
+              const badge = (o._margin||0) < 0;
+              return <div key={o.id || i}>
+                <OrderRow o={o} i={i} showMargin={true}/>
+              </div>;
+            })}
+            {analysis.worstValue.length === 0 && <div style={{textAlign:'center', color:'#86868b', padding:40}}>No cost data found</div>}
+          </>}
+
+          {/* ── TAB: By Supplier ── */}
+          {tab === 'suppliers' && <>
+            <div style={{fontSize:11, color:'#86868b', marginBottom:12}}>Total spend per supplier</div>
+            {analysis.suppliers.map((s, i) => {
+              const margin = s.cost > 0 ? (s.profit / s.cost * 100) : 0;
+              return (
+                <div key={s.name} style={{display:'flex', alignItems:'center', gap:8, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+                  <div style={{width:100, fontSize:12, color:'#1d1d1f', fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{s.name}</div>
+                  <div style={{flex:1, height:22, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative'}}>
+                    <div style={{height:'100%', width:`${(s.cost / maxSupCost) * 100}%`, background:s.color || '#ff3b30', borderRadius:6, opacity:0.7}}/>
+                  </div>
+                  <div style={{width:70, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:'#ff3b30'}}>£{s.cost.toFixed(0)}</div>
+                  <div style={{width:65, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:s.profit>=0?'#34c759':'#ff3b30'}}>${s.profit.toFixed(0)}</div>
+                  <div style={{width:50, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:margin>30?'#34c759':margin>10?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
+                  <div style={{width:40, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:'#86868b'}}>{s.count}×</div>
+                </div>
+              );
+            })}
+          </>}
+
+          {/* ── TAB: By Importer ── */}
+          {tab === 'importers' && <>
+            <div style={{fontSize:11, color:'#86868b', marginBottom:12}}>Spend breakdown by team member</div>
+            {analysis.importers.map((imp, i) => {
+              const margin = imp.cost > 0 ? (imp.profit / imp.cost * 100) : 0;
+              return (
+                <div key={imp.name} style={{display:'flex', alignItems:'center', gap:8, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+                  <div style={{width:90, fontSize:12, color:'#1d1d1f', fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{imp.name.split(' ')[0]}</div>
+                  <div style={{flex:1, height:22, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative'}}>
+                    <div style={{height:'100%', width:`${(imp.cost / maxImpCost) * 100}%`, background:'#ff3b30', borderRadius:6, opacity:0.6}}/>
+                    <div style={{position:'absolute', top:0, left:0, height:'100%', width:`${(imp.profit / maxImpCost) * 100}%`, background:'rgba(52,199,89,0.5)', borderRadius:6}}/>
+                  </div>
+                  <div style={{width:70, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:'#ff3b30'}}>£{imp.cost.toFixed(0)}</div>
+                  <div style={{width:65, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:imp.profit>=0?'#34c759':'#ff3b30'}}>${imp.profit.toFixed(0)}</div>
+                  <div style={{width:50, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:margin>30?'#34c759':margin>10?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
+                  <div style={{width:40, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:'#86868b'}}>{imp.count}×</div>
+                </div>
+              );
+            })}
+
+            {/* Legend */}
+            <div style={{display:'flex', gap:16, marginTop:16, fontSize:11, color:'#86868b'}}>
+              <span><span style={{display:'inline-block', width:10, height:10, borderRadius:3, background:'rgba(255,59,48,0.6)', marginRight:4}}/>Cost</span>
+              <span><span style={{display:'inline-block', width:10, height:10, borderRadius:3, background:'rgba(52,199,89,0.5)', marginRight:4}}/>Profit</span>
+              <span>Columns: Cost · Profit · ROI% · Orders</span>
+            </div>
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ OWNER ANALYTICS DASHBOARD ═══ */
 function OwnerDashboard({orders}) {
   const [showRevenueBreakdown, setShowRevenueBreakdown] = React.useState(false);
+  const [showCostAnalysis, setShowCostAnalysis] = React.useState(false);
   const stats = useMemo(()=>{
     try {
       console.log(`📊 Computing dashboard stats for ${orders.length} orders...`);
@@ -2829,13 +3066,17 @@ function OwnerDashboard({orders}) {
           {l:'DHL Orders',v:(stats.dhlOrders||[]).length,c:'#ff9f0a',sub:'≥$300 value'},
           {l:'Exceptions',v:(stats.exceptions||[]).length,c:(stats.exceptions||[]).length?'#ff3b30':'#34c759',sub:'Discrepancy'},
           {l:'Refunded',v:(stats.refunded||[]).length,c:(stats.refunded||[]).length?'#ff3b30':'#34c759',sub:'Orders'},
-        ].map(({l,v,c,sub})=>(
-          <div key={l} className="stat-card" onClick={l==='Total Revenue' ? ()=>setShowRevenueBreakdown(true) : undefined} style={l==='Total Revenue' ? {cursor:'pointer', position:'relative'} : undefined}>
-            <div className="stat-label">{l}{l==='Total Revenue' && <span style={{fontSize:10, marginLeft:4, color:'#0071e3'}}>↗</span>}</div>
+        ].map(({l,v,c,sub})=>{
+          const clickable = l==='Total Revenue' || l==='Total Buy Cost';
+          const handleClick = l==='Total Revenue' ? ()=>setShowRevenueBreakdown(true) : l==='Total Buy Cost' ? ()=>setShowCostAnalysis(true) : undefined;
+          return (
+          <div key={l} className="stat-card" onClick={handleClick} style={clickable ? {cursor:'pointer', position:'relative'} : undefined}>
+            <div className="stat-label">{l}{clickable && <span style={{fontSize:10, marginLeft:4, color:'#0071e3'}}>↗</span>}</div>
             <div className="stat-value" style={{color:c}}>{v}</div>
-            <div style={{fontSize:11,color:'#86868b',marginTop:4}}>{sub}{l==='Total Revenue' && <span style={{color:'#0071e3', marginLeft:4}}>· Click for details</span>}</div>
+            <div style={{fontSize:11,color:'#86868b',marginTop:4}}>{sub}{clickable && <span style={{color:'#0071e3', marginLeft:4}}>· Click for details</span>}</div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:20}}>
@@ -2922,6 +3163,7 @@ function OwnerDashboard({orders}) {
       </div>}
 
       {showRevenueBreakdown && <RevenueBreakdownModal orders={orders} onClose={() => setShowRevenueBreakdown(false)}/>}
+      {showCostAnalysis && <CostAnalysisModal orders={orders} onClose={() => setShowCostAnalysis(false)}/>}
     </div>
   );
 }
