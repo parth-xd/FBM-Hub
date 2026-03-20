@@ -2347,8 +2347,330 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
   );
 }
 
+/* ═══ REVENUE BREAKDOWN MODAL ═══ */
+function RevenueBreakdownModal({orders, onClose}) {
+  const [view, setView] = React.useState('monthly'); // 'daily' | 'weekly' | 'monthly'
+  const [tab, setTab] = React.useState('breakdown'); // 'breakdown' | 'projected' | 'products'
+
+  const analysis = React.useMemo(() => {
+    const parseNum = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+    const now = new Date();
+
+    // Group orders by date bucket
+    const daily = {}, weekly = {}, monthly = {};
+    const asinMap = {};
+
+    orders.forEach(o => {
+      const rev = parseNum(o.totalSellPrice);
+      const profit = parseNum(o.expectedProfit);
+      const cost = parseNum(o.totalBuyPriceIncVAT);
+      if (rev === 0 && profit === 0) return;
+
+      const d = o.orderDate ? new Date(o.orderDate) : null;
+      if (!d || isNaN(d.getTime())) return;
+
+      // Daily key: YYYY-MM-DD
+      const dayKey = d.toISOString().slice(0, 10);
+      if (!daily[dayKey]) daily[dayKey] = {rev:0, profit:0, cost:0, count:0};
+      daily[dayKey].rev += rev; daily[dayKey].profit += profit; daily[dayKey].cost += cost; daily[dayKey].count++;
+
+      // Weekly key: Year-W##
+      const startOfYear = new Date(d.getFullYear(), 0, 1);
+      const weekNum = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+      const weekKey = `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+      if (!weekly[weekKey]) weekly[weekKey] = {rev:0, profit:0, cost:0, count:0, start: dayKey};
+      weekly[weekKey].rev += rev; weekly[weekKey].profit += profit; weekly[weekKey].cost += cost; weekly[weekKey].count++;
+
+      // Monthly key: YYYY-MM
+      const monthKey = d.toISOString().slice(0, 7);
+      if (!monthly[monthKey]) monthly[monthKey] = {rev:0, profit:0, cost:0, count:0};
+      monthly[monthKey].rev += rev; monthly[monthKey].profit += profit; monthly[monthKey].cost += cost; monthly[monthKey].count++;
+
+      // ASIN aggregation
+      const asin = o.asin || 'Unknown';
+      if (!asinMap[asin]) asinMap[asin] = {asin, name: o.productName || 'Unknown', rev:0, profit:0, count:0};
+      asinMap[asin].rev += rev; asinMap[asin].profit += profit; asinMap[asin].count++;
+    });
+
+    // Sort each by key descending (most recent first)
+    const dailyArr = Object.entries(daily).sort((a,b) => b[0].localeCompare(a[0]));
+    const weeklyArr = Object.entries(weekly).sort((a,b) => b[0].localeCompare(a[0]));
+    const monthlyArr = Object.entries(monthly).sort((a,b) => b[0].localeCompare(a[0]));
+
+    // Top products by revenue
+    const topProducts = Object.values(asinMap).sort((a,b) => b.rev - a.rev).slice(0, 20);
+
+    // Growth projection from monthly data (need at least 2 months)
+    const monthlyChron = [...monthlyArr].reverse(); // oldest first
+    let projections = null;
+    if (monthlyChron.length >= 2) {
+      // Calculate month-over-month growth rates
+      const growthRates = [];
+      for (let i = 1; i < monthlyChron.length; i++) {
+        const prev = monthlyChron[i-1][1].rev;
+        const curr = monthlyChron[i][1].rev;
+        if (prev > 0) growthRates.push((curr - prev) / prev);
+      }
+      const avgGrowth = growthRates.length > 0 ? growthRates.reduce((s,g) => s+g, 0) / growthRates.length : 0;
+      const lastMonth = monthlyChron[monthlyChron.length - 1];
+      const lastRev = lastMonth[1].rev;
+      const lastProfit = lastMonth[1].profit;
+
+      // Project next 3 months
+      const projected = [];
+      let baseRev = lastRev, baseProfit = lastProfit;
+      const lastDate = new Date(lastMonth[0] + '-01');
+      for (let i = 1; i <= 3; i++) {
+        const nextDate = new Date(lastDate);
+        nextDate.setMonth(nextDate.getMonth() + i);
+        const key = nextDate.toISOString().slice(0, 7);
+        baseRev = baseRev * (1 + avgGrowth);
+        baseProfit = baseProfit * (1 + avgGrowth);
+        projected.push({month: key, rev: baseRev, profit: baseProfit});
+      }
+      projections = {avgGrowth, lastMonth: lastMonth[0], lastRev, projected, monthlyChron};
+    }
+
+    // Total revenue
+    const totalRev = orders.reduce((s, o) => s + parseNum(o.totalSellPrice), 0);
+
+    return {dailyArr, weeklyArr, monthlyArr, topProducts, projections, totalRev};
+  }, [orders]);
+
+  const formatDate = (key) => {
+    try {
+      const d = new Date(key + (key.length === 7 ? '-01' : ''));
+      if (key.length === 7) return d.toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
+      return d.toLocaleDateString('en-US', {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'});
+    } catch { return key; }
+  };
+
+  const currentData = view === 'daily' ? analysis.dailyArr : view === 'weekly' ? analysis.weeklyArr : analysis.monthlyArr;
+  const maxRev = currentData.length > 0 ? Math.max(...currentData.map(([,d]) => d.rev)) : 1;
+  const maxProductRev = analysis.topProducts.length > 0 ? analysis.topProducts[0].rev : 1;
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{zIndex:9999}}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{maxWidth:900, width:'95vw', maxHeight:'90vh', display:'flex', flexDirection:'column'}}>
+        {/* Header */}
+        <div style={{padding:'20px 24px 0', borderBottom:'1px solid rgba(0,0,0,0.06)'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+            <div>
+              <div style={{fontSize:19, fontWeight:700, color:'#1d1d1f', letterSpacing:'-0.02em'}}>Revenue Breakdown</div>
+              <div style={{fontSize:13, color:'#86868b', marginTop:4}}>Total: <span style={{color:'#34c759', fontWeight:600}}>${analysis.totalRev.toFixed(0)}</span> across {orders.length} orders</div>
+            </div>
+            <button onClick={onClose} style={{width:32, height:32, borderRadius:16, border:'none', background:'rgba(0,0,0,0.06)', cursor:'pointer', fontSize:16, color:'#86868b', display:'flex', alignItems:'center', justifyContent:'center'}}>×</button>
+          </div>
+
+          {/* Tab bar */}
+          <div style={{display:'flex', gap:0, borderBottom:'none'}}>
+            {[
+              {key:'breakdown', label:'Time Breakdown'},
+              {key:'projected', label:'Projections'},
+              {key:'products', label:'Top Products'},
+            ].map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                padding:'10px 20px', fontSize:13, fontWeight:tab===t.key?600:400, color:tab===t.key?'#0071e3':'#86868b',
+                background:'none', border:'none', borderBottom:tab===t.key?'2px solid #0071e3':'2px solid transparent',
+                cursor:'pointer', transition:'all 0.2s', letterSpacing:'-0.01em'
+              }}>{t.label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{flex:1, overflowY:'auto', padding:'20px 24px'}}>
+
+          {/* ── TAB 1: Time Breakdown ── */}
+          {tab === 'breakdown' && <>
+            {/* Period toggle */}
+            <div style={{display:'flex', gap:4, marginBottom:20, background:'rgba(0,0,0,0.04)', borderRadius:10, padding:3, width:'fit-content'}}>
+              {['daily','weekly','monthly'].map(v => (
+                <button key={v} onClick={() => setView(v)} style={{
+                  padding:'7px 18px', fontSize:12, fontWeight:view===v?600:400, color:view===v?'#fff':'#86868b',
+                  background:view===v?'#0071e3':'transparent', border:'none', borderRadius:8, cursor:'pointer', transition:'all 0.2s',
+                  textTransform:'capitalize'
+                }}>{v}</button>
+              ))}
+            </div>
+
+            {/* Summary row */}
+            {currentData.length > 0 && (() => {
+              const totalRev = currentData.reduce((s,[,d]) => s + d.rev, 0);
+              const totalProfit = currentData.reduce((s,[,d]) => s + d.profit, 0);
+              const totalOrders = currentData.reduce((s,[,d]) => s + d.count, 0);
+              const avgRev = totalRev / currentData.length;
+              return (
+                <div style={{display:'flex', gap:10, marginBottom:20, flexWrap:'wrap'}}>
+                  {[
+                    {l:`Avg ${view} revenue`, v:`$${avgRev.toFixed(0)}`, c:'#0071e3'},
+                    {l:'Total periods', v:currentData.length, c:'#86868b'},
+                    {l:'Total orders', v:totalOrders, c:'#86868b'},
+                    {l:'Total profit', v:`$${totalProfit.toFixed(0)}`, c:totalProfit>=0?'#34c759':'#ff3b30'},
+                  ].map(s => (
+                    <div key={s.l} style={{flex:'1 1 140px', background:'rgba(0,0,0,0.02)', borderRadius:12, padding:'12px 16px'}}>
+                      <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>{s.l}</div>
+                      <div style={{fontSize:17, fontWeight:700, color:s.c, fontFamily:'IBM Plex Mono'}}>{s.v}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Bar chart rows */}
+            <div style={{display:'flex', flexDirection:'column', gap:2}}>
+              {currentData.slice(0, view === 'daily' ? 30 : view === 'weekly' ? 20 : 12).map(([key, data]) => (
+                <div key={key} style={{display:'flex', alignItems:'center', gap:8, padding:'8px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+                  <div style={{width:view==='daily'?130:100, fontSize:12, color:'#86868b', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flexShrink:0}}>
+                    {view === 'weekly' ? key : formatDate(key)}
+                  </div>
+                  <div style={{flex:1, height:24, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative'}}>
+                    <div style={{height:'100%', width:`${(data.rev / maxRev) * 100}%`, background:'linear-gradient(90deg, #34c759, #30d158)', borderRadius:6, transition:'width 0.3s'}}/>
+                    <div style={{position:'absolute', top:0, left:0, height:'100%', width:`${(data.profit / maxRev) * 100}%`, background:'rgba(0,113,227,0.25)', borderRadius:6}}/>
+                  </div>
+                  <div style={{width:80, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:'#34c759', fontWeight:600}}>${data.rev.toFixed(0)}</div>
+                  <div style={{width:70, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:data.profit>=0?'#0071e3':'#ff3b30'}}>${data.profit.toFixed(0)}</div>
+                  <div style={{width:40, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:'#86868b'}}>{data.count}</div>
+                </div>
+              ))}
+            </div>
+
+            {currentData.length === 0 && <div style={{textAlign:'center', color:'#86868b', padding:40, fontSize:14}}>No order data with dates found</div>}
+
+            {/* Legend */}
+            <div style={{display:'flex', gap:16, marginTop:16, fontSize:11, color:'#86868b'}}>
+              <span><span style={{display:'inline-block', width:10, height:10, borderRadius:3, background:'#34c759', marginRight:4}}/>Revenue</span>
+              <span><span style={{display:'inline-block', width:10, height:10, borderRadius:3, background:'rgba(0,113,227,0.4)', marginRight:4}}/>Profit</span>
+              <span>Right columns: Revenue · Profit · Orders</span>
+            </div>
+          </>}
+
+          {/* ── TAB 2: Projections ── */}
+          {tab === 'projected' && <>
+            {analysis.projections ? (() => {
+              const p = analysis.projections;
+              const growthPct = (p.avgGrowth * 100).toFixed(1);
+              const isPositive = p.avgGrowth >= 0;
+
+              // Combine historical + projected for visual chart
+              const historical = p.monthlyChron.slice(-6);
+              const allMonths = [...historical.map(([k,d]) => ({month:k, rev:d.rev, profit:d.profit, type:'actual'})), ...p.projected.map(d => ({month:d.month, rev:d.rev, profit:d.profit, type:'projected'}))];
+              const chartMax = Math.max(...allMonths.map(m => m.rev), 1);
+
+              return <>
+                {/* Growth summary */}
+                <div style={{display:'flex', gap:10, marginBottom:24, flexWrap:'wrap'}}>
+                  <div style={{flex:'1 1 200px', background:isPositive?'rgba(52,199,89,0.08)':'rgba(255,59,48,0.08)', borderRadius:14, padding:'16px 20px'}}>
+                    <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>Avg Monthly Growth</div>
+                    <div style={{fontSize:28, fontWeight:700, color:isPositive?'#34c759':'#ff3b30', fontFamily:'IBM Plex Mono'}}>{isPositive?'+':''}{growthPct}%</div>
+                    <div style={{fontSize:11, color:'#86868b', marginTop:4}}>Based on {p.monthlyChron.length} months of data</div>
+                  </div>
+                  <div style={{flex:'1 1 200px', background:'rgba(0,113,227,0.06)', borderRadius:14, padding:'16px 20px'}}>
+                    <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>Last Month Revenue</div>
+                    <div style={{fontSize:28, fontWeight:700, color:'#0071e3', fontFamily:'IBM Plex Mono'}}>${p.lastRev.toFixed(0)}</div>
+                    <div style={{fontSize:11, color:'#86868b', marginTop:4}}>{formatDate(p.lastMonth)}</div>
+                  </div>
+                  {p.projected[2] && <div style={{flex:'1 1 200px', background:'rgba(255,159,10,0.08)', borderRadius:14, padding:'16px 20px'}}>
+                    <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>3-Month Projected</div>
+                    <div style={{fontSize:28, fontWeight:700, color:'#ff9f0a', fontFamily:'IBM Plex Mono'}}>${p.projected[2].rev.toFixed(0)}</div>
+                    <div style={{fontSize:11, color:'#86868b', marginTop:4}}>by {formatDate(p.projected[2].month)}</div>
+                  </div>}
+                </div>
+
+                {/* Combined chart: historical + forecast */}
+                <div style={{fontSize:14, fontWeight:600, color:'#1d1d1f', marginBottom:12}}>Revenue Trajectory</div>
+                <div style={{display:'flex', flexDirection:'column', gap:2}}>
+                  {allMonths.map(m => (
+                    <div key={m.month} style={{display:'flex', alignItems:'center', gap:8, padding:'8px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+                      <div style={{width:100, fontSize:12, color:m.type==='projected'?'#ff9f0a':'#86868b', fontWeight:m.type==='projected'?600:400}}>
+                        {formatDate(m.month)}
+                        {m.type==='projected' && <span style={{fontSize:9, marginLeft:4, opacity:0.7}}>↗</span>}
+                      </div>
+                      <div style={{flex:1, height:24, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden'}}>
+                        <div style={{
+                          height:'100%', width:`${(m.rev / chartMax) * 100}%`, borderRadius:6, transition:'width 0.3s',
+                          background: m.type==='projected' ? 'repeating-linear-gradient(90deg, #ff9f0a 0, #ff9f0a 8px, rgba(255,159,10,0.3) 8px, rgba(255,159,10,0.3) 12px)' : 'linear-gradient(90deg, #34c759, #30d158)'
+                        }}/>
+                      </div>
+                      <div style={{width:80, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:m.type==='projected'?'#ff9f0a':'#34c759', fontWeight:600}}>
+                        ${m.rev.toFixed(0)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Projection table */}
+                <div style={{marginTop:24, fontSize:14, fontWeight:600, color:'#1d1d1f', marginBottom:12}}>Projected Numbers</div>
+                <table style={{width:'100%', borderCollapse:'collapse'}}>
+                  <thead>
+                    <tr style={{borderBottom:'1px solid rgba(0,0,0,0.08)'}}>
+                      {['Month','Projected Revenue','Projected Profit','Growth'].map(h =>
+                        <th key={h} style={{padding:'8px 12px', textAlign:'left', color:'#86868b', fontSize:11, fontWeight:600}}>{h}</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {p.projected.map((m, i) => (
+                      <tr key={m.month} style={{borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+                        <td style={{padding:'8px 12px', fontSize:13, fontWeight:600, color:'#ff9f0a'}}>{formatDate(m.month)}</td>
+                        <td style={{padding:'8px 12px', fontFamily:'IBM Plex Mono', fontSize:13, color:'#34c759', fontWeight:600}}>${m.rev.toFixed(0)}</td>
+                        <td style={{padding:'8px 12px', fontFamily:'IBM Plex Mono', fontSize:13, color:m.profit>=0?'#0071e3':'#ff3b30'}}>${m.profit.toFixed(0)}</td>
+                        <td style={{padding:'8px 12px', fontFamily:'IBM Plex Mono', fontSize:12, color:isPositive?'#34c759':'#ff3b30'}}>{isPositive?'+':''}{growthPct}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div style={{marginTop:16, fontSize:11, color:'#86868b', fontStyle:'italic'}}>
+                  Projections are based on average month-over-month growth rate of {isPositive?'+':''}{growthPct}% calculated from {p.monthlyChron.length} months of historical data. Actual results may vary.
+                </div>
+              </>;
+            })() : (
+              <div style={{textAlign:'center', color:'#86868b', padding:60}}>
+                <div style={{fontSize:40, marginBottom:12}}>📊</div>
+                <div style={{fontSize:15, fontWeight:600, color:'#1d1d1f', marginBottom:8}}>Need More Data</div>
+                <div style={{fontSize:13}}>At least 2 months of orders with dates are required to calculate growth projections.</div>
+              </div>
+            )}
+          </>}
+
+          {/* ── TAB 3: Top Products by ASIN ── */}
+          {tab === 'products' && <>
+            <div style={{fontSize:11, color:'#86868b', marginBottom:16}}>Top selling products ranked by revenue</div>
+
+            {analysis.topProducts.length > 0 ? (
+              <div style={{display:'flex', flexDirection:'column', gap:2}}>
+                {analysis.topProducts.map((p, i) => (
+                  <div key={p.asin} style={{display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+                    <div style={{width:28, height:28, borderRadius:8, background:i<3?'#0071e3':'rgba(0,0,0,0.06)', color:i<3?'#fff':'#86868b', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, flexShrink:0}}>{i+1}</div>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{p.name}</div>
+                      <div style={{fontSize:11, color:'#86868b', fontFamily:'IBM Plex Mono', marginTop:2}}>{p.asin}</div>
+                    </div>
+                    <div style={{flex:1, height:20, background:'rgba(0,0,0,0.03)', borderRadius:5, overflow:'hidden'}}>
+                      <div style={{height:'100%', width:`${(p.rev / maxProductRev) * 100}%`, background:'linear-gradient(90deg, #0071e3, #5ac8fa)', borderRadius:5}}/>
+                    </div>
+                    <div style={{width:80, textAlign:'right'}}>
+                      <div style={{fontFamily:'IBM Plex Mono', fontSize:13, fontWeight:600, color:'#34c759'}}>${p.rev.toFixed(0)}</div>
+                      <div style={{fontFamily:'IBM Plex Mono', fontSize:10, color:p.profit>=0?'#0071e3':'#ff3b30'}}>P: ${p.profit.toFixed(0)}</div>
+                    </div>
+                    <div style={{width:40, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:'#86868b'}}>{p.count}×</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{textAlign:'center', color:'#86868b', padding:40, fontSize:14}}>No ASIN data found in orders</div>
+            )}
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ OWNER ANALYTICS DASHBOARD ═══ */
 function OwnerDashboard({orders}) {
+  const [showRevenueBreakdown, setShowRevenueBreakdown] = React.useState(false);
   const stats = useMemo(()=>{
     try {
       console.log(`📊 Computing dashboard stats for ${orders.length} orders...`);
@@ -2478,10 +2800,10 @@ function OwnerDashboard({orders}) {
           {l:'Exceptions',v:(stats.exceptions||[]).length,c:(stats.exceptions||[]).length?'#ff3b30':'#34c759',sub:'Discrepancy'},
           {l:'Refunded',v:(stats.refunded||[]).length,c:(stats.refunded||[]).length?'#ff3b30':'#34c759',sub:'Orders'},
         ].map(({l,v,c,sub})=>(
-          <div key={l} className="stat-card">
-            <div className="stat-label">{l}</div>
+          <div key={l} className="stat-card" onClick={l==='Total Revenue' ? ()=>setShowRevenueBreakdown(true) : undefined} style={l==='Total Revenue' ? {cursor:'pointer', position:'relative'} : undefined}>
+            <div className="stat-label">{l}{l==='Total Revenue' && <span style={{fontSize:10, marginLeft:4, color:'#0071e3'}}>↗</span>}</div>
             <div className="stat-value" style={{color:c}}>{v}</div>
-            <div style={{fontSize:11,color:'#86868b',marginTop:4}}>{sub}</div>
+            <div style={{fontSize:11,color:'#86868b',marginTop:4}}>{sub}{l==='Total Revenue' && <span style={{color:'#0071e3', marginLeft:4}}>· Click for details</span>}</div>
           </div>
         ))}
       </div>
@@ -2569,6 +2891,7 @@ function OwnerDashboard({orders}) {
         </div>
       </div>}
 
+      {showRevenueBreakdown && <RevenueBreakdownModal orders={orders} onClose={() => setShowRevenueBreakdown(false)}/>}
     </div>
   );
 }
