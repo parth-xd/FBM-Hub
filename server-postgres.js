@@ -314,6 +314,21 @@ const initializeDatabase = async () => {
     } catch (e) {
       console.warn('⚠️ Date fix migration error (non-critical):', e.message);
     }
+
+    // ═══ SEED: Ensure owner account exists in users table ═══
+    try {
+      const ownerEmail = 'parttthh@gmail.com';
+      const exists = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [ownerEmail]);
+      if (exists.rows.length === 0) {
+        await pool.query(
+          'INSERT INTO users (email, name, role, approved, created_at, updated_at) VALUES ($1, $2, $3, TRUE, NOW(), NOW())',
+          [ownerEmail, 'Owner', 'owner']
+        );
+        console.log('✅ Seeded owner account:', ownerEmail);
+      }
+    } catch (e) {
+      console.warn('⚠️ Owner seed error (non-critical):', e.message);
+    }
   } catch (err) {
     console.error('❌ Database initialization error:', err.message);
   }
@@ -419,14 +434,14 @@ app.post('/api/auth/request-login', security.validateRequest(security.schemas.em
   try {
     const { email } = req.body;
 
-    // Check if user exists and is approved
-    const userResult = await pool.query('SELECT id, email, approved, role, name FROM users WHERE email = $1', [email]);
+    // Check if user exists and is approved (case-insensitive)
+    const userResult = await pool.query('SELECT id, email, approved, role, name FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     const user = userResult.rows[0];
 
     if (!user) {
       // User doesn't exist - check if they have a pending signup request
       const pendingRequest = await pool.query(
-        'SELECT id FROM role_requests WHERE user_email = $1 AND status = $2',
+        'SELECT id FROM role_requests WHERE LOWER(user_email) = LOWER($1) AND status = $2',
         [email, 'pending']
       );
       
