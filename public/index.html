@@ -571,6 +571,7 @@ const API = {
   syncAccounts: () => `${API.base()}/api/admin/sync-accounts`,
   getUsers: () => `${API.base()}/api/users`,
   deleteUser: (email) => `${API.base()}/api/users/${encodeURIComponent(email)}`,
+  pingActivity: () => `${API.base()}/api/users/activity/ping`,
   auditLogs: () => `${API.base()}/api/audit-logs`,
   
   // Schema - Single source of truth for all columns
@@ -4700,6 +4701,33 @@ function App() {
       document.body.style.overflow = 'auto';
     };
   }, [mobileMenuOpen]);
+
+  // Keep-alive: Update activity timestamp every 5 minutes when logged in
+  React.useEffect(() => {
+    if (!currentUser?.email || !sessionToken) return;
+
+    const pingActivity = async () => {
+      try {
+        await fetch(API.pingActivity(), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-email': currentUser.email
+          }
+        });
+      } catch (error) {
+        console.warn('Activity ping failed:', error.message);
+      }
+    };
+
+    // Ping immediately on login
+    pingActivity();
+
+    // Then ping every 5 minutes
+    const interval = setInterval(pingActivity, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [currentUser?.email, sessionToken]);
 
   // Create Multi PO
   const createMultiPO = React.useCallback((multiPO) => {

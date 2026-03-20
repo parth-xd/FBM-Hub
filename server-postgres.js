@@ -1232,6 +1232,23 @@ app.delete('/api/users/:email', async (req, res) => {
   }
 });
 
+// Keep-alive: update last activity timestamp
+app.post('/api/users/activity/ping', async (req, res) => {
+  try {
+    const email = req.headers['x-user-email'] || '';
+    if (!email) {
+      return res.status(400).json({ error: 'User email required' });
+    }
+    
+    // Update last activity timestamp
+    await pool.query('UPDATE users SET updated_at = NOW() WHERE email = $1', [email]);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Activity ping error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ═══ AUDIT LOG ═══
 
 app.get('/api/audit-logs', async (req, res) => {
