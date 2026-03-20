@@ -187,11 +187,19 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
 @media (max-width: 768px) {
   .modal-overlay { padding: 20px 12px; }
   .modal-box { width: 100%; border-radius: 20px; }
+  .modal-box [style*="maxWidth"] { max-width: 100% !important; }
 }
 
 @media (max-width: 480px) {
   .modal-overlay { padding: 12px 8px; align-items: flex-end; }
   .modal-box { width: 100%; border-radius: 24px 24px 0 0; margin-bottom: 0; max-height: 85vh; overflow-y: auto; }
+}
+
+/* Responsive modal inner rows */
+@media (max-width: 768px) {
+  .modal-box table { font-size: 11px; }
+  .modal-box table th, .modal-box table td { padding: 6px 8px; }
+  .hide-mobile { display: none !important; }
 }
 
 /* ═══ SECTION TITLE ═══ */
@@ -251,25 +259,32 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   border: none;
   border-radius: var(--apple-radius-lg);
   padding: 20px 24px;
-  flex: 1;
-  min-width: 140px;
+  flex: 1 1 auto;
+  min-width: 120px;
+  max-width: 100%;
   box-shadow: var(--apple-shadow-sm);
   transition: all .3s var(--apple-transition);
+  overflow: hidden;
 }
 .stat-card:hover { box-shadow: var(--apple-shadow-md); transform: translateY(-2px); }
-.stat-label { font-size: 12px; color: var(--apple-text-tertiary); font-weight: 500; margin-bottom: 8px; letter-spacing: -0.01em; text-transform: none; }
-.stat-value { font-size: 32px; font-weight: 700; font-family: 'SF Pro Display', 'Inter', sans-serif; line-height: 1; color: var(--apple-text); letter-spacing: -0.03em; }
+.stat-label { font-size: 12px; color: var(--apple-text-tertiary); font-weight: 500; margin-bottom: 8px; letter-spacing: -0.01em; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-value { font-size: clamp(20px, 2.2vw, 32px); font-weight: 700; font-family: 'SF Pro Display', 'Inter', sans-serif; line-height: 1; color: var(--apple-text); letter-spacing: -0.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 1280px) {
+  .stat-card { padding: 16px 18px; min-width: 110px; }
+  .stat-value { font-size: clamp(18px, 2vw, 26px); }
+}
 
 @media (max-width: 768px) {
-  .stat-card { padding: 14px 16px; min-width: 100%; }
+  .stat-card { padding: 14px 16px; min-width: calc(50% - 6px); flex: 1 1 calc(50% - 6px); }
   .stat-label { font-size: 10px; margin-bottom: 6px; }
-  .stat-value { font-size: 24px; }
+  .stat-value { font-size: 22px; }
 }
 
 @media (max-width: 480px) {
-  .stat-card { padding: 12px 14px; }
+  .stat-card { padding: 12px 14px; min-width: calc(50% - 5px); flex: 1 1 calc(50% - 5px); }
   .stat-label { font-size: 9px; }
-  .stat-value { font-size: 20px; }
+  .stat-value { font-size: 18px; }
 }
 
 .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -2506,9 +2521,9 @@ function RevenueBreakdownModal({orders, onClose}) {
                     {l:'Total orders', v:totalOrders, c:'#86868b'},
                     {l:'Total profit', v:`$${totalProfit.toFixed(0)}`, c:totalProfit>=0?'#34c759':'#ff3b30'},
                   ].map(s => (
-                    <div key={s.l} style={{flex:'1 1 140px', background:'rgba(0,0,0,0.02)', borderRadius:12, padding:'12px 16px'}}>
+                    <div key={s.l} style={{flex:'1 1 120px', background:'rgba(0,0,0,0.02)', borderRadius:12, padding:'10px 14px'}}>
                       <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>{s.l}</div>
-                      <div style={{fontSize:17, fontWeight:700, color:s.c, fontFamily:'IBM Plex Mono'}}>{s.v}</div>
+                      <div style={{fontSize:'clamp(14px, 1.8vw, 17px)', fontWeight:700, color:s.c, fontFamily:'IBM Plex Mono'}}>{s.v}</div>
                     </div>
                   ))}
                 </div>
@@ -2518,17 +2533,17 @@ function RevenueBreakdownModal({orders, onClose}) {
             {/* Bar chart rows */}
             <div style={{display:'flex', flexDirection:'column', gap:2}}>
               {currentData.slice(0, view === 'daily' ? 30 : view === 'weekly' ? 20 : 12).map(([key, data]) => (
-                <div key={key} style={{display:'flex', alignItems:'center', gap:8, padding:'8px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
-                  <div style={{width:view==='daily'?130:100, fontSize:12, color:'#86868b', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flexShrink:0}}>
+                <div key={key} style={{display:'flex', alignItems:'center', gap:6, padding:'8px 0', borderBottom:'1px solid rgba(0,0,0,0.04)', minWidth:0}}>
+                  <div style={{width:view==='daily'?'clamp(70px,15vw,130px)':'clamp(60px,12vw,100px)', fontSize:11, color:'#86868b', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flexShrink:0}}>
                     {view === 'weekly' ? key : formatDate(key)}
                   </div>
-                  <div style={{flex:1, height:24, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative'}}>
+                  <div style={{flex:1, height:24, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative', minWidth:40}}>
                     <div style={{height:'100%', width:`${(data.rev / maxRev) * 100}%`, background:'linear-gradient(90deg, #34c759, #30d158)', borderRadius:6, transition:'width 0.3s'}}/>
                     <div style={{position:'absolute', top:0, left:0, height:'100%', width:`${(data.profit / maxRev) * 100}%`, background:'rgba(0,113,227,0.25)', borderRadius:6}}/>
                   </div>
-                  <div style={{width:80, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:'#34c759', fontWeight:600}}>${data.rev.toFixed(0)}</div>
-                  <div style={{width:70, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:data.profit>=0?'#0071e3':'#ff3b30'}}>${data.profit.toFixed(0)}</div>
-                  <div style={{width:40, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:'#86868b'}}>{data.count}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:'#34c759', fontWeight:600}}>${data.rev.toFixed(0)}</div>
+                  <div className="hide-mobile" style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:10, color:data.profit>=0?'#0071e3':'#ff3b30'}}>${data.profit.toFixed(0)}</div>
+                  <div className="hide-mobile" style={{flexShrink:0, width:30, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:10, color:'#86868b'}}>{data.count}</div>
                 </div>
               ))}
             </div>
@@ -2558,19 +2573,19 @@ function RevenueBreakdownModal({orders, onClose}) {
               return <>
                 {/* Growth summary */}
                 <div style={{display:'flex', gap:10, marginBottom:24, flexWrap:'wrap'}}>
-                  <div style={{flex:'1 1 200px', background:isPositive?'rgba(52,199,89,0.08)':'rgba(255,59,48,0.08)', borderRadius:14, padding:'16px 20px'}}>
+                  <div style={{flex:'1 1 160px', background:isPositive?'rgba(52,199,89,0.08)':'rgba(255,59,48,0.08)', borderRadius:14, padding:'14px 16px'}}>
                     <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>Avg Monthly Growth</div>
-                    <div style={{fontSize:28, fontWeight:700, color:isPositive?'#34c759':'#ff3b30', fontFamily:'IBM Plex Mono'}}>{isPositive?'+':''}{growthPct}%</div>
+                    <div style={{fontSize:'clamp(20px, 2.5vw, 28px)', fontWeight:700, color:isPositive?'#34c759':'#ff3b30', fontFamily:'IBM Plex Mono'}}>{isPositive?'+':''}{growthPct}%</div>
                     <div style={{fontSize:11, color:'#86868b', marginTop:4}}>Based on {p.monthlyChron.length} months of data</div>
                   </div>
-                  <div style={{flex:'1 1 200px', background:'rgba(0,113,227,0.06)', borderRadius:14, padding:'16px 20px'}}>
+                  <div style={{flex:'1 1 160px', background:'rgba(0,113,227,0.06)', borderRadius:14, padding:'14px 16px'}}>
                     <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>Last Month Revenue</div>
-                    <div style={{fontSize:28, fontWeight:700, color:'#0071e3', fontFamily:'IBM Plex Mono'}}>${p.lastRev.toFixed(0)}</div>
+                    <div style={{fontSize:'clamp(20px, 2.5vw, 28px)', fontWeight:700, color:'#0071e3', fontFamily:'IBM Plex Mono'}}>${p.lastRev.toFixed(0)}</div>
                     <div style={{fontSize:11, color:'#86868b', marginTop:4}}>{formatDate(p.lastMonth)}</div>
                   </div>
-                  {p.projected[2] && <div style={{flex:'1 1 200px', background:'rgba(255,159,10,0.08)', borderRadius:14, padding:'16px 20px'}}>
+                  {p.projected[2] && <div style={{flex:'1 1 160px', background:'rgba(255,159,10,0.08)', borderRadius:14, padding:'14px 16px'}}>
                     <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>3-Month Projected</div>
-                    <div style={{fontSize:28, fontWeight:700, color:'#ff9f0a', fontFamily:'IBM Plex Mono'}}>${p.projected[2].rev.toFixed(0)}</div>
+                    <div style={{fontSize:'clamp(20px, 2.5vw, 28px)', fontWeight:700, color:'#ff9f0a', fontFamily:'IBM Plex Mono'}}>${p.projected[2].rev.toFixed(0)}</div>
                     <div style={{fontSize:11, color:'#86868b', marginTop:4}}>by {formatDate(p.projected[2].month)}</div>
                   </div>}
                 </div>
@@ -2579,18 +2594,18 @@ function RevenueBreakdownModal({orders, onClose}) {
                 <div style={{fontSize:14, fontWeight:600, color:'#1d1d1f', marginBottom:12}}>Revenue Trajectory</div>
                 <div style={{display:'flex', flexDirection:'column', gap:2}}>
                   {allMonths.map(m => (
-                    <div key={m.month} style={{display:'flex', alignItems:'center', gap:8, padding:'8px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
-                      <div style={{width:100, fontSize:12, color:m.type==='projected'?'#ff9f0a':'#86868b', fontWeight:m.type==='projected'?600:400}}>
+                    <div key={m.month} style={{display:'flex', alignItems:'center', gap:6, padding:'8px 0', borderBottom:'1px solid rgba(0,0,0,0.04)', minWidth:0}}>
+                      <div style={{width:'clamp(60px,12vw,100px)', fontSize:11, color:m.type==='projected'?'#ff9f0a':'#86868b', fontWeight:m.type==='projected'?600:400, flexShrink:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
                         {formatDate(m.month)}
                         {m.type==='projected' && <span style={{fontSize:9, marginLeft:4, opacity:0.7}}>↗</span>}
                       </div>
-                      <div style={{flex:1, height:24, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden'}}>
+                      <div style={{flex:1, height:24, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', minWidth:40}}>
                         <div style={{
                           height:'100%', width:`${(m.rev / chartMax) * 100}%`, borderRadius:6, transition:'width 0.3s',
                           background: m.type==='projected' ? 'repeating-linear-gradient(90deg, #ff9f0a 0, #ff9f0a 8px, rgba(255,159,10,0.3) 8px, rgba(255,159,10,0.3) 12px)' : 'linear-gradient(90deg, #34c759, #30d158)'
                         }}/>
                       </div>
-                      <div style={{width:80, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:m.type==='projected'?'#ff9f0a':'#34c759', fontWeight:600}}>
+                      <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:m.type==='projected'?'#ff9f0a':'#34c759', fontWeight:600}}>
                         ${m.rev.toFixed(0)}
                       </div>
                     </div>
@@ -2652,19 +2667,19 @@ function RevenueBreakdownModal({orders, onClose}) {
                 {sortedProducts.map((p, i) => {
                   const barVal = productSort === 'count' ? p.count : productSort === 'profit' ? Math.abs(p.profit) : p.rev;
                   return (
-                  <div key={p.key} style={{display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
-                    <div style={{width:28, height:28, borderRadius:8, background:i<3?'#0071e3':'rgba(0,0,0,0.06)', color:i<3?'#fff':'#86868b', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, flexShrink:0}}>{i+1}</div>
+                  <div key={p.key} style={{display:'flex', alignItems:'center', gap:8, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)', minWidth:0}}>
+                    <div style={{width:26, height:26, borderRadius:8, background:i<3?'#0071e3':'rgba(0,0,0,0.06)', color:i<3?'#fff':'#86868b', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, flexShrink:0}}>{i+1}</div>
                     <div style={{flex:'1 1 0', minWidth:0}}>
-                      <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{p.name}</div>
-                      <div style={{fontSize:11, color:'#86868b', fontFamily:'IBM Plex Mono', marginTop:2}}>{p.asin}</div>
+                      <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{p.name}</div>
+                      <div style={{fontSize:10, color:'#86868b', fontFamily:'IBM Plex Mono', marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{p.asin}</div>
                     </div>
-                    <div style={{flex:'0 0 120px', height:20, background:'rgba(0,0,0,0.03)', borderRadius:5, overflow:'hidden'}}>
+                    <div className="hide-mobile" style={{flex:'0 0 clamp(60px,10vw,120px)', height:20, background:'rgba(0,0,0,0.03)', borderRadius:5, overflow:'hidden'}}>
                       <div style={{height:'100%', width:`${(barVal / maxProductVal) * 100}%`, background:productSort==='profit'?(p.profit>=0?'linear-gradient(90deg, #34c759, #30d158)':'linear-gradient(90deg, #ff3b30, #ff6961)'):'linear-gradient(90deg, #0071e3, #5ac8fa)', borderRadius:5}}/>
                     </div>
-                    <div style={{width:55, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:13, fontWeight:700, color:'#0071e3'}}>{p.count}×</div>
-                    <div style={{width:70, textAlign:'right'}}>
-                      <div style={{fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:600, color:'#34c759'}}>${p.rev.toFixed(0)}</div>
-                      <div style={{fontFamily:'IBM Plex Mono', fontSize:10, color:p.profit>=0?'#0071e3':'#ff3b30'}}>P: ${p.profit.toFixed(0)}</div>
+                    <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:'#0071e3'}}>{p.count}×</div>
+                    <div style={{flexShrink:0, textAlign:'right'}}>
+                      <div style={{fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:600, color:'#34c759'}}>${p.rev.toFixed(0)}</div>
+                      <div style={{fontFamily:'IBM Plex Mono', fontSize:9, color:p.profit>=0?'#0071e3':'#ff3b30'}}>P: ${p.profit.toFixed(0)}</div>
                     </div>
                   </div>
                   );
@@ -2766,25 +2781,25 @@ function CostAnalysisModal({orders, onClose}) {
     const rev = parseFloat(o.totalSellPrice) || 0;
     const margin = cost > 0 ? (profit / cost * 100) : 0;
     return (
-      <div style={{display:'flex', alignItems:'center', gap:8, padding:'9px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
-        <div style={{width:26, height:26, borderRadius:7, background:i<3?'#ff3b30':i<10?'rgba(255,59,48,0.12)':'rgba(0,0,0,0.05)', color:i<3?'#fff':i<10?'#ff3b30':'#86868b', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, flexShrink:0}}>{i+1}</div>
+      <div style={{display:'flex', alignItems:'center', gap:6, padding:'9px 0', borderBottom:'1px solid rgba(0,0,0,0.04)', minWidth:0}}>
+        <div style={{width:24, height:24, borderRadius:7, background:i<3?'#ff3b30':i<10?'rgba(255,59,48,0.12)':'rgba(0,0,0,0.05)', color:i<3?'#fff':i<10?'#ff3b30':'#86868b', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, flexShrink:0}}>{i+1}</div>
         <div style={{flex:'1 1 0', minWidth:0}}>
-          <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{o.productName || 'Unknown'}</div>
-          <div style={{fontSize:10, color:'#86868b', fontFamily:'IBM Plex Mono', marginTop:1}}>…{(o.orderId||'').slice(-14)}</div>
+          <div style={{fontSize:11, fontWeight:600, color:'#1d1d1f', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{o.productName || 'Unknown'}</div>
+          <div style={{fontSize:9, color:'#86868b', fontFamily:'IBM Plex Mono', marginTop:1}}>…{(o.orderId||'').slice(-14)}</div>
         </div>
-        <div style={{width:70, textAlign:'right'}}>
-          <div style={{fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:'#ff3b30'}}>£{cost.toFixed(0)}</div>
-          <div style={{fontSize:10, color:'#86868b'}}>cost</div>
+        <div style={{flexShrink:0, textAlign:'right'}}>
+          <div style={{fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:'#ff3b30'}}>£{cost.toFixed(0)}</div>
+          <div style={{fontSize:9, color:'#86868b'}}>cost</div>
         </div>
-        <div style={{width:65, textAlign:'right'}}>
-          <div style={{fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:600, color:profit>=0?'#34c759':'#ff3b30'}}>${profit.toFixed(0)}</div>
-          <div style={{fontSize:10, color:'#86868b'}}>profit</div>
+        <div style={{flexShrink:0, textAlign:'right'}}>
+          <div style={{fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:600, color:profit>=0?'#34c759':'#ff3b30'}}>${profit.toFixed(0)}</div>
+          <div style={{fontSize:9, color:'#86868b'}}>profit</div>
         </div>
-        {showMargin && <div style={{width:55, textAlign:'right'}}>
-          <div style={{fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:margin>50?'#34c759':margin>20?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
-          <div style={{fontSize:10, color:'#86868b'}}>ROI</div>
+        {showMargin && <div style={{flexShrink:0, textAlign:'right'}}>
+          <div style={{fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:margin>50?'#34c759':margin>20?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
+          <div style={{fontSize:9, color:'#86868b'}}>ROI</div>
         </div>}
-        <div style={{width:60, textAlign:'right', fontSize:11, color:'#86868b', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{(o.purchasedBy||'—').split(' ')[0]}</div>
+        <div className="hide-mobile" style={{flexShrink:0, fontSize:10, color:'#86868b', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:60}}>{(o.purchasedBy||'—').split(' ')[0]}</div>
       </div>
     );
   };
@@ -2869,15 +2884,15 @@ function CostAnalysisModal({orders, onClose}) {
             {analysis.suppliers.map((s, i) => {
               const margin = s.cost > 0 ? (s.profit / s.cost * 100) : 0;
               return (
-                <div key={s.name} style={{display:'flex', alignItems:'center', gap:8, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
-                  <div style={{width:100, fontSize:12, color:'#1d1d1f', fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{s.name}</div>
-                  <div style={{flex:1, height:22, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative'}}>
+                <div key={s.name} style={{display:'flex', alignItems:'center', gap:6, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)', minWidth:0}}>
+                  <div style={{width:'clamp(60px,12vw,100px)', fontSize:11, color:'#1d1d1f', fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flexShrink:0}}>{s.name}</div>
+                  <div style={{flex:1, height:22, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative', minWidth:30}}>
                     <div style={{height:'100%', width:`${(s.cost / maxSupCost) * 100}%`, background:s.color || '#ff3b30', borderRadius:6, opacity:0.7}}/>
                   </div>
-                  <div style={{width:70, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:'#ff3b30'}}>£{s.cost.toFixed(0)}</div>
-                  <div style={{width:65, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:s.profit>=0?'#34c759':'#ff3b30'}}>${s.profit.toFixed(0)}</div>
-                  <div style={{width:50, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:margin>30?'#34c759':margin>10?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
-                  <div style={{width:40, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:'#86868b'}}>{s.count}×</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:'#ff3b30'}}>£{s.cost.toFixed(0)}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:s.profit>=0?'#34c759':'#ff3b30'}}>${s.profit.toFixed(0)}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:10, color:margin>30?'#34c759':margin>10?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
+                  <div className="hide-mobile" style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:'#86868b'}}>{s.count}×</div>
                 </div>
               );
             })}
@@ -2889,16 +2904,16 @@ function CostAnalysisModal({orders, onClose}) {
             {analysis.importers.map((imp, i) => {
               const margin = imp.cost > 0 ? (imp.profit / imp.cost * 100) : 0;
               return (
-                <div key={imp.name} style={{display:'flex', alignItems:'center', gap:8, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
-                  <div style={{width:90, fontSize:12, color:'#1d1d1f', fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{imp.name.split(' ')[0]}</div>
-                  <div style={{flex:1, height:22, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative'}}>
+                <div key={imp.name} style={{display:'flex', alignItems:'center', gap:6, padding:'10px 0', borderBottom:'1px solid rgba(0,0,0,0.04)', minWidth:0}}>
+                  <div style={{width:'clamp(55px,11vw,90px)', fontSize:11, color:'#1d1d1f', fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flexShrink:0}}>{imp.name.split(' ')[0]}</div>
+                  <div style={{flex:1, height:22, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative', minWidth:30}}>
                     <div style={{height:'100%', width:`${(imp.cost / maxImpCost) * 100}%`, background:'#ff3b30', borderRadius:6, opacity:0.6}}/>
                     <div style={{position:'absolute', top:0, left:0, height:'100%', width:`${(imp.profit / maxImpCost) * 100}%`, background:'rgba(52,199,89,0.5)', borderRadius:6}}/>
                   </div>
-                  <div style={{width:70, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:'#ff3b30'}}>£{imp.cost.toFixed(0)}</div>
-                  <div style={{width:65, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:imp.profit>=0?'#34c759':'#ff3b30'}}>${imp.profit.toFixed(0)}</div>
-                  <div style={{width:50, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:margin>30?'#34c759':margin>10?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
-                  <div style={{width:40, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, color:'#86868b'}}>{imp.count}×</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:'#ff3b30'}}>£{imp.cost.toFixed(0)}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:imp.profit>=0?'#34c759':'#ff3b30'}}>${imp.profit.toFixed(0)}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:10, color:margin>30?'#34c759':margin>10?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
+                  <div className="hide-mobile" style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:'#86868b'}}>{imp.count}×</div>
                 </div>
               );
             })}
@@ -3067,12 +3082,12 @@ function OwnerDashboard({orders}) {
           <div style={{fontSize:15,fontWeight:600,color:'#1d1d1f',marginBottom:16,letterSpacing:'-0.01em'}}>Orders by Importer</div>
           {(stats.importerList||[]).slice(0,8).map(([name,data])=>(
             <div key={name} className="bar-row">
-              <div style={{width:90,color:'#86868b',fontSize:12,textAlign:'right',paddingRight:8,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{name.split(' ')[0]}</div>
+              <div style={{width:'clamp(50px,10vw,90px)',color:'#86868b',fontSize:11,textAlign:'right',paddingRight:6,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flexShrink:0}}>{name.split(' ')[0]}</div>
               <div className="bar-track">
                 <div className="bar-fill" style={{width:`${(data.count/(maxImporterCount||1))*100}%`,background:'#0071e3'}}/>
               </div>
-              <div style={{width:50,fontFamily:'IBM Plex Mono',fontSize:12,color:'#0071e3',textAlign:'right'}}>{data.count||0}</div>
-              <div style={{width:60,fontFamily:'IBM Plex Mono',fontSize:12,color:(data.profit||0)>=0?'#34c759':'#ff3b30',textAlign:'right'}}>${(data.profit||0).toFixed(0)}</div>
+              <div style={{flexShrink:0,fontFamily:'IBM Plex Mono',fontSize:11,color:'#0071e3',textAlign:'right'}}>{data.count||0}</div>
+              <div style={{flexShrink:0,fontFamily:'IBM Plex Mono',fontSize:11,color:(data.profit||0)>=0?'#34c759':'#ff3b30',textAlign:'right'}}>${(data.profit||0).toFixed(0)}</div>
             </div>
           ))}
         </div>
@@ -3082,11 +3097,11 @@ function OwnerDashboard({orders}) {
           <div style={{fontSize:15,fontWeight:600,color:'#1d1d1f',marginBottom:16,letterSpacing:'-0.01em'}}>Orders by Supplier</div>
           {(stats.supplierList||[]).slice(0,10).map(([name,data])=>(
             <div key={name} className="bar-row">
-              <div style={{width:90,color:'#86868b',fontSize:12,textAlign:'right',paddingRight:8,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{name}</div>
+              <div style={{width:'clamp(50px,10vw,90px)',color:'#86868b',fontSize:11,textAlign:'right',paddingRight:6,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flexShrink:0}}>{name}</div>
               <div className="bar-track">
                 <div className="bar-fill" style={{width:`${(data.count/(maxSupplierCount||1))*100}%`,background:data.color}}/>
               </div>
-              <div style={{width:50,fontFamily:'IBM Plex Mono',fontSize:12,color:data.color,textAlign:'right'}}>{data.count||0}</div>
+              <div style={{flexShrink:0,fontFamily:'IBM Plex Mono',fontSize:11,color:data.color,textAlign:'right'}}>{data.count||0}</div>
             </div>
           ))}
         </div>
