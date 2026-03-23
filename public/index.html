@@ -3949,6 +3949,24 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Failed to update role'); return; }
       setAccs(prev => prev.map((a, j) => j === i ? {...a, role: newRole} : a));
+      // If we just changed THIS user's own role, refresh immediately
+      if (u.email.toLowerCase() === currentUser?.email?.toLowerCase()) {
+        try {
+          const pingRes = await fetch(API.pingActivity(), {
+            method: 'POST',
+            headers: {'Content-Type':'application/json', 'x-user-email': currentUser.email}
+          });
+          if(pingRes.ok) {
+            const pingData = await pingRes.json();
+            if (pingData.role) {
+              const updated = {...currentUser, role: pingData.role};
+              setCurrentUser(updated);
+              localStorage.setItem('currentUser', JSON.stringify(updated));
+              window.CURRENT_USER = updated;
+            }
+          }
+        } catch(e) { console.warn('Role refresh failed:', e); }
+      }
     } catch(err) { alert('Failed: ' + err.message); }
   };
 
