@@ -1353,9 +1353,10 @@ app.post('/api/users/activity/ping', async (req, res) => {
       return res.status(400).json({ error: 'User email required' });
     }
     
-    // Update last activity timestamp
-    await pool.query('UPDATE users SET updated_at = NOW() WHERE email = $1', [email]);
-    res.json({ ok: true });
+    // Update last activity timestamp and return fresh role
+    const result = await pool.query('UPDATE users SET updated_at = NOW() WHERE email = $1 RETURNING role', [email]);
+    const freshRole = result.rows[0]?.role || null;
+    res.json({ ok: true, role: freshRole });
   } catch (error) {
     console.error('Activity ping error:', error);
     res.status(500).json({ error: error.message });

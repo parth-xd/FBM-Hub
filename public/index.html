@@ -1136,6 +1136,7 @@ const ROLES={
   owner:   {label:'Owner',   color:'#f97316',canEdit:true, canImport:true, canLock:true, canManage:true,seesAll:true,canSeeAnalytics:true},
   importer:{label:'Importer',color:'#0071e3',canEdit:true, canImport:true, canLock:true, canManage:false,seesAll:true,canSeeAnalytics:false},
   packer:  {label:'Packer',  color:'#22c55e',canEdit:false,canImport:false,canLock:false,canManage:false,seesAll:false,canSeeAnalytics:false},
+  viewer:  {label:'Viewer',  color:'#8e8e93',canEdit:false,canImport:false,canLock:false,canManage:false,seesAll:true,canSeeAnalytics:false},
 };
 
 /* ═══ REAL DATA ═══ */
@@ -1638,7 +1639,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
   
   const st=rowState(order);
   const s=STATE[st];
-  const ri=ROLES[role];
+  const ri=ROLES[role]||ROLES.packer;
   const sup=order.supplier||getSupplier(order.buyLink);
 
   function copy(text) { navigator.clipboard?.writeText(String(text||'')); }
@@ -4033,7 +4034,15 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
         </select>
       </div>
       <button style={{background:'#0071e3',color:'#fff',border:'none',borderRadius:20,padding:'8px 14px',cursor:'pointer',fontSize:12,fontWeight:600,flexShrink:0}}
-        onClick={()=>{if(n.name&&n.email){setAccs(p=>[...p,{...n,id:Date.now()}]);setN({name:'',email:'',role:'packer'});}}}>Add</button>
+        onClick={async ()=>{if(n.name&&n.email){
+          try {
+            const res = await fetch(API.syncAccounts(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':currentUser?.email||''},body:JSON.stringify({accounts:[{email:n.email,name:n.name,role:n.role}]})});
+            const data = await res.json();
+            if(!res.ok){alert(data.error||'Failed to add');return;}
+            setAccs(p=>[...p,{id:Date.now(),name:n.name,email:n.email,role:n.role,approved:true,lastUpdated:new Date().toLocaleString()}]);
+            setN({name:'',email:'',role:'packer'});
+          } catch(err){alert('Failed: '+err.message);}
+        }else{alert('Name and email are required');}}}>Add</button>
     </div>
   </>;
 }
@@ -5686,7 +5695,7 @@ function App() {
   
   const tokenClientRef = React.useRef(null);
   const role = currentUser?.role || 'packer';
-  const ri = ROLES[role];
+  const ri = ROLES[role] || ROLES.packer;
 
   // Calculate combined discrepancy for all rows with same Order ID
   const getCombinedDiscrepancy = (order) => {
@@ -5744,13 +5753,22 @@ function App() {
 
     const pingActivity = async () => {
       try {
-        await fetch(API.pingActivity(), {
+        const res = await fetch(API.pingActivity(), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-user-email': currentUser.email
           }
         });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.role && data.role !== currentUser.role) {
+            const updated = {...currentUser, role: data.role};
+            setCurrentUser(updated);
+            localStorage.setItem('currentUser', JSON.stringify(updated));
+            window.CURRENT_USER = updated;
+          }
+        }
       } catch (error) {
         console.warn('Activity ping failed:', error.message);
       }
