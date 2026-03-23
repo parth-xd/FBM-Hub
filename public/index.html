@@ -200,8 +200,11 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   .modal-box table { font-size: 11px; }
   .modal-box table th, .modal-box table td { padding: 6px 8px; }
   .hide-mobile { display: none !important; }
-  .settings-sidebar { width: 56px !important; padding: 8px 4px !important; }
-  .settings-sidebar button { font-size: 10px !important; justify-content: center; padding: 10px 8px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .settings-sidebar { width: 100% !important; padding: 0 !important; display: flex !important; flex-direction: row !important; border-right: none !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; background: #fafafa !important; overflow-x: auto !important; overflow-y: visible !important; gap: 0 !important; }
+  .settings-sidebar button { font-size: 11px !important; font-weight: 600 !important; padding: 12px 14px !important; white-space: nowrap !important; overflow: visible !important; text-overflow: clip !important; flex-shrink: 0 !important; margin-bottom: 0 !important; margin-right: 0 !important; border: none !important; border-radius: 0 !important; transition: all 0.2s !important; border-bottom: 3px solid transparent !important; background: transparent !important; color: #86868b !important; }
+  .settings-sidebar button:first-child { border-left: 1px solid rgba(0,0,0,0.06) !important; }
+  .settings-sidebar button:hover { background: rgba(0,0,0,0.05) !important; }
+  .modal-box { max-height: calc(92vh - 120px) !important; }
 }
 
 /* ═══ SECTION TITLE ═══ */
@@ -3670,9 +3673,9 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
   };
 
   const SECTIONS = [
-    {key:'accounts', label:'Manage Accounts', icon:''},
-    {key:'rates', label:'Manage Rates', icon:''},
-    {key:'calculations', label:'Manage Calculations', icon:''},
+    {key:'accounts', label:'Manage Accounts', abbr:'Accounts', color:'#0071e3'},
+    {key:'rates', label:'Manage Rates', abbr:'Rates', color:'#ff9500'},
+    {key:'calculations', label:'Manage Calculations', abbr:'Formulas', color:'#34c759'},
   ];
 
   const C = calc;
@@ -3690,16 +3693,17 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
         </div>
 
         <div style={{display:'flex', flex:1, overflow:'hidden', minHeight:0}}>
-          {/* Sidebar */}
+          {/* Sidebar - becomes horizontal tabs on mobile */}
           <div style={{width:200, borderRight:'1px solid rgba(0,0,0,0.06)', padding:'12px 8px', background:'#fafafa', flexShrink:0, overflowY:'auto'}} className="settings-sidebar">
             {SECTIONS.map(s => (
               <button key={s.key} onClick={() => setSection(s.key)} style={{
                 display:'flex', alignItems:'center', gap:8, width:'100%', padding:'10px 12px', border:'none',
                 borderRadius:10, fontSize:13, fontWeight:section===s.key?600:400, cursor:'pointer', marginBottom:2,
-                background:section===s.key?'#fff':'transparent', color:section===s.key?'#1d1d1f':'#86868b',
+                background:section===s.key?'#fff':'transparent', color:section===s.key?s.color:'#86868b',
                 boxShadow:section===s.key?'0 1px 3px rgba(0,0,0,0.08)':'none', transition:'all 0.15s',
-                textAlign:'left',
+                textAlign:'left', borderLeftWidth:section===s.key?3:0, borderLeftColor:s.color, paddingLeft:section===s.key?9:12,
               }}>
+                <span style={{width:6, height:6, borderRadius:'50%', background:s.color, flexShrink:0}}></span>
                 {s.label}
               </button>
             ))}
