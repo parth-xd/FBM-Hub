@@ -201,8 +201,7 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   .modal-box table th, .modal-box table td { padding: 6px 8px; }
   .hide-mobile { display: none !important; }
   .settings-sidebar { width: 56px !important; padding: 8px 4px !important; }
-  .settings-sidebar button { font-size: 0 !important; justify-content: center; padding: 10px 8px !important; }
-  .settings-sidebar button span { font-size: 18px !important; }
+  .settings-sidebar button { font-size: 10px !important; justify-content: center; padding: 10px 8px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
 /* ═══ SECTION TITLE ═══ */
@@ -3670,9 +3669,9 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
   };
 
   const SECTIONS = [
-    {key:'accounts', label:'Manage Accounts', icon:'👥'},
-    {key:'rates', label:'Manage Rates', icon:'💷'},
-    {key:'calculations', label:'Manage Calculations', icon:'🧮'},
+    {key:'accounts', label:'Manage Accounts', icon:''},
+    {key:'rates', label:'Manage Rates', icon:''},
+    {key:'calculations', label:'Manage Calculations', icon:''},
   ];
 
   const C = calc;
@@ -3682,7 +3681,7 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
       <div className="modal-box fadeIn" style={{maxWidth:920, maxHeight:'92vh', display:'flex', flexDirection:'column', padding:0}} onClick={e=>e.stopPropagation()}>
         {/* Header */}
         <div style={{padding:'16px 20px', borderBottom:'1px solid rgba(0,0,0,0.08)', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0}}>
-          <div style={{fontWeight:700, fontSize:18, color:'#1d1d1f', letterSpacing:'-0.02em'}}>⚙️ Settings</div>
+          <div style={{fontWeight:700, fontSize:18, color:'#1d1d1f', letterSpacing:'-0.02em'}}>Settings</div>
           <div style={{display:'flex',alignItems:'center',gap:10}}>
             {toast && <span style={{fontSize:12, color:'#34c759', fontWeight:600, animation:'fadeIn 0.3s'}}>{toast}</span>}
             <button onClick={onClose} style={{background:'#f5f5f7',border:'none',color:'#86868b',borderRadius:50,width:30,height:30,cursor:'pointer',fontSize:16,padding:0,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
@@ -3700,7 +3699,7 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
                 boxShadow:section===s.key?'0 1px 3px rgba(0,0,0,0.08)':'none', transition:'all 0.15s',
                 textAlign:'left',
               }}>
-                <span style={{fontSize:16}}>{s.icon}</span> {s.label}
+                {s.label}
               </button>
             ))}
           </div>
@@ -3812,49 +3811,49 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
               {/* Formula Sections */}
               {[
                 {
-                  title: '📦 Total Buy Price (inc VAT)',
+                  title: 'Total Buy Price (inc VAT)',
                   formula: 'Total Buy inc VAT = (Unit Price × Quantity) + Delivery Fee',
                   example: `E.g. Unit=£10, Qty=2, Delivery=£5 → (10 × 2) + 5 = £25.00`,
                   fields: ['Unit Buy Price', 'B-Qty (quantity)', 'Delivery Fee per Line'],
                   color: '#ff3b30',
                 },
                 {
-                  title: '📦 Total Buy Price (exc VAT)',
+                  title: 'Total Buy Price (exc VAT)',
                   formula: `Total Buy exc VAT = (Delivery Fee ÷ ${C.vatRate.toFixed(1)}) + IF(VAT=YES, (Unit × Qty) ÷ ${C.vatRate.toFixed(1)}, Unit × Qty)`,
                   example: `VAT=YES: (5 ÷ ${C.vatRate}) + (20 ÷ ${C.vatRate}) = £${(5/C.vatRate + 20/C.vatRate).toFixed(2)}  |  VAT=NO: (5 ÷ ${C.vatRate}) + 20 = £${(5/C.vatRate + 20).toFixed(2)}`,
                   fields: ['Delivery Fee', 'Unit Buy Price', 'B-Qty', 'VAT Status'],
                   color: '#ff9f0a',
                 },
                 {
-                  title: '🚚 Shipping Cost (Royal Mail)',
+                  title: 'Shipping Cost (Royal Mail)',
                   formula: 'Shipping = (Base Price + Per Kg × Weight) × (1 + Fuel Surcharge) + Duty',
                   example: `E.g. 1.5kg: (£4.59 + £2.27 × 1.5) × ${(1+C.fuelSurcharge).toFixed(3)} + £${C.dutyPerOrder.toFixed(2)} = £${(((4.59 + 2.27*1.5) * (1+C.fuelSurcharge)) + C.dutyPerOrder).toFixed(2)}`,
                   fields: ['Order Weight (kg)', 'RM Rate Card lookup'],
                   color: '#0071e3',
                 },
                 {
-                  title: '💰 Revenue After Amazon Fees',
+                  title: 'Revenue After Amazon Fees',
                   formula: `Revenue USD = Sell Price × ${C.amazonFeeMultiplier} (Amazon takes ${((1-C.amazonFeeMultiplier)*100).toFixed(1)}%)`,
                   example: `E.g. Sell=$50 → 50 × ${C.amazonFeeMultiplier} = $${(50*C.amazonFeeMultiplier).toFixed(2)}`,
                   fields: ['Total Sell Price (USD)'],
                   color: '#34c759',
                 },
                 {
-                  title: '💵 Total Cost in USD',
+                  title: 'Total Cost in USD',
                   formula: `Cost USD = ((Buy exc VAT × ${C.costOverheadMultiplier}) + Shipping) × GBP→USD Rate`,
                   example: `E.g. Buy=£20, Ship=£8, Rate=${C.defaultGbpUsdRate} → ((20 × ${C.costOverheadMultiplier}) + 8) × ${C.defaultGbpUsdRate} = $${((20*C.costOverheadMultiplier + 8) * C.defaultGbpUsdRate).toFixed(2)}`,
                   fields: ['Total Buy exc VAT', 'Shipping GBP', 'GBP→USD Rate'],
                   color: '#ff9f0a',
                 },
                 {
-                  title: '📊 Expected Profit',
+                  title: 'Expected Profit',
                   formula: `Profit = Revenue USD − Cost USD − $${C.fixedOrderCost.toFixed(0)} (fixed cost)`,
                   example: `E.g. Rev=$42.35, Cost=$38.50 → 42.35 − 38.50 − ${C.fixedOrderCost} = $${(42.35 - 38.50 - C.fixedOrderCost).toFixed(2)}`,
                   fields: ['Revenue USD', 'Cost USD', 'Fixed Order Cost'],
                   color: '#34c759',
                 },
                 {
-                  title: '📈 Profit Margin %',
+                  title: 'Profit Margin %',
                   formula: 'Margin = (Expected Profit ÷ Sell Price) × 100',
                   example: `E.g. Profit=$1.85, Sell=$50 → (1.85 ÷ 50) × 100 = 3.7%`,
                   fields: ['Expected Profit', 'Total Sell Price'],
@@ -3877,7 +3876,7 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
 
               {/* Full pipeline summary */}
               <div style={{background:'linear-gradient(135deg,#f0f7ff,#f5f0ff)', borderRadius:14, padding:'16px 18px', marginTop:8, border:'1px solid rgba(0,113,227,0.1)'}}>
-                <div style={{fontSize:14, fontWeight:700, color:'#1d1d1f', marginBottom:10}}>🔄 Full Calculation Pipeline</div>
+                <div style={{fontSize:14, fontWeight:700, color:'#1d1d1f', marginBottom:10}}>Full Calculation Pipeline</div>
                 <div style={{fontFamily:'IBM Plex Mono', fontSize:11, lineHeight:2, color:'#1d1d1f'}}>
                   <div><span style={{color:'#86868b'}}>1.</span> <span style={{color:'#ff3b30'}}>Buy inc VAT</span> = (unit × qty) + delivery</div>
                   <div><span style={{color:'#86868b'}}>2.</span> <span style={{color:'#ff9f0a'}}>Buy exc VAT</span> = (delivery ÷ {C.vatRate}) + IF(VAT, buy÷{C.vatRate}, buy)</div>
