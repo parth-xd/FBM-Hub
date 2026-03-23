@@ -200,6 +200,9 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   .modal-box table { font-size: 11px; }
   .modal-box table th, .modal-box table td { padding: 6px 8px; }
   .hide-mobile { display: none !important; }
+  .settings-sidebar { width: 56px !important; padding: 8px 4px !important; }
+  .settings-sidebar button { font-size: 0 !important; justify-content: center; padding: 10px 8px !important; }
+  .settings-sidebar button span { font-size: 18px !important; }
 }
 
 /* ═══ SECTION TITLE ═══ */
@@ -611,6 +614,10 @@ const API = {
   fbaApprovalPurchase: (id) => `${API.base()}/api/fba/approvals/${id}/purchase`,
   fbaLookup: (asin) => `${API.base()}/api/fba/lookup/${encodeURIComponent(asin)}`,
   fbaNextStb: () => `${API.base()}/api/fba/next-stb`,
+
+  // Settings
+  getSettings: () => `${API.base()}/api/settings`,
+  updateSetting: (key) => `${API.base()}/api/settings/${encodeURIComponent(key)}`,
 };
 
 /* ═══ CENTRALIZED SCHEMA - Single Source of Truth for All Columns ═══ */
@@ -767,7 +774,7 @@ function SupplierBadge({buyLink,small=false}) {
 }
 
 /* ═══ ROYAL MAIL RATE CARD ═══ */
-const RM_RATES = [
+const DEFAULT_RM_RATES = [
   {wFrom:0,wTo:2,priceItem:4.59,priceKg:2.27,fuel:0.065,duty:0.5},
   {wFrom:2,wTo:5,priceItem:8.59,priceKg:2.15,fuel:0.065,duty:0.5},
   {wFrom:5,wTo:6,priceItem:21.55,priceKg:0,fuel:0.065,duty:0.5},
@@ -781,9 +788,25 @@ const RM_RATES = [
   {wFrom:25,wTo:30,priceItem:75.83,priceKg:0,fuel:0.065,duty:0.5},
 ];
 
+const DEFAULT_CALC_CONSTANTS = {
+  fuelSurcharge: 0.065,
+  dutyPerOrder: 0.5,
+  vatRate: 1.2,
+  amazonFeeMultiplier: 0.847,
+  costOverheadMultiplier: 1.1,
+  fixedOrderCost: 2,
+  defaultGbpUsdRate: 1.34,
+};
+
+// Mutable config - loaded from DB settings, falls back to defaults
+window.APP_RATES = { rmRates: [...DEFAULT_RM_RATES], calc: {...DEFAULT_CALC_CONSTANTS} };
+
+const RM_RATES = DEFAULT_RM_RATES; // Keep reference for backwards compat
+
 function calcRMShipping(weightKg) {
   if (!weightKg || weightKg <= 0) return null;
-  const r = RM_RATES.find(r => weightKg >= r.wFrom && weightKg < r.wTo);
+  const rates = window.APP_RATES?.rmRates || DEFAULT_RM_RATES;
+  const r = rates.find(r => weightKg >= r.wFrom && weightKg < r.wTo);
   if (!r) return null;
   const base = r.priceItem + (r.priceKg * weightKg);
   const total = (base * (1 + r.fuel)) + r.duty;
@@ -797,27 +820,28 @@ function calcRMShipping(weightKg) {
 //   Shipping = Royal Mail rate card lookup on orderWeight
 //   Profit = (sellUSD × 0.847) - ((buyExcVAT × 1.1 + shipping) × GBP_USD) - 2
 function calcProfitability({ sellPriceUSD, unitBuyPrice, deliveryFee, bQty, vatStatus, orderWeightKg, gbpUsdRate }) {
+  const C = window.APP_RATES?.calc || DEFAULT_CALC_CONSTANTS;
   const sell = parseFloat(sellPriceUSD) || 0;
   const unit = parseFloat(unitBuyPrice) || 0;
   const deliv = parseFloat(deliveryFee) || 0;
   const bq = parseFloat(bQty) || 1;
   const vat = (vatStatus || 'NO').toUpperCase();
   const wt = parseFloat(orderWeightKg) || 0;
-  const rate = parseFloat(gbpUsdRate) || 1.34;
+  const rate = parseFloat(gbpUsdRate) || C.defaultGbpUsdRate;
 
   if (!unit) return null;
 
   const totalBuyIncVAT = (unit * bq) + deliv;
-  const totalBuyExcVAT = (deliv / 1.2) + (vat === 'YES' ? (unit * bq) / 1.2 : unit * bq);
+  const totalBuyExcVAT = (deliv / C.vatRate) + (vat === 'YES' ? (unit * bq) / C.vatRate : unit * bq);
   const orderWeight = wt;
   const shippingGBP = calcRMShipping(orderWeight);
 
   let expectedProfit = null;
   let profitMarginPct = null;
   if (shippingGBP !== null && sell > 0) {
-    const revenueUSD = sell * 0.847;
-    const costUSD = ((totalBuyExcVAT * 1.1) + shippingGBP) * rate;
-    expectedProfit = revenueUSD - costUSD - 2;
+    const revenueUSD = sell * C.amazonFeeMultiplier;
+    const costUSD = ((totalBuyExcVAT * C.costOverheadMultiplier) + shippingGBP) * rate;
+    expectedProfit = revenueUSD - costUSD - C.fixedOrderCost;
     profitMarginPct = (expectedProfit / sell) * 100;
   }
 
@@ -3588,6 +3612,402 @@ function RoleRequestsPanel({onDecision}) {
   );
 }
 
+/* ═══ SETTINGS MODAL (Owner Only) ═══ */
+function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
+  const [section, setSection] = useState('accounts');
+  const [rmRates, setRmRates] = useState(() => JSON.parse(JSON.stringify(window.APP_RATES?.rmRates || DEFAULT_RM_RATES)));
+  const [calc, setCalc] = useState(() => ({...(window.APP_RATES?.calc || DEFAULT_CALC_CONSTANTS)}));
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  // Load saved settings from DB on mount
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(API.getSettings());
+        if (res.ok) {
+          const data = await res.json();
+          if (data.rm_rates?.value) {
+            setRmRates(data.rm_rates.value);
+            window.APP_RATES.rmRates = data.rm_rates.value;
+          }
+          if (data.calc_constants?.value) {
+            setCalc(data.calc_constants.value);
+            window.APP_RATES.calc = data.calc_constants.value;
+          }
+        }
+      } catch(e) { console.warn('Settings load error:', e); }
+    })();
+  }, []);
+
+  const saveSetting = async (key, value) => {
+    setSaving(true);
+    try {
+      const res = await fetch(API.updateSetting(key), {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json', 'x-user-email': currentUser?.email || ''},
+        body: JSON.stringify({ value })
+      });
+      if (res.ok) {
+        if (key === 'rm_rates') window.APP_RATES.rmRates = value;
+        if (key === 'calc_constants') window.APP_RATES.calc = value;
+        setToast('Saved!');
+        setTimeout(() => setToast(null), 2000);
+      }
+    } catch(e) { setToast('Error saving'); setTimeout(() => setToast(null), 3000); }
+    setSaving(false);
+  };
+
+  const updateRmRate = (idx, field, val) => {
+    const updated = [...rmRates];
+    updated[idx] = {...updated[idx], [field]: parseFloat(val) || 0};
+    setRmRates(updated);
+  };
+
+  const updateCalc = (field, val) => {
+    setCalc(prev => ({...prev, [field]: parseFloat(val) || 0}));
+  };
+
+  const SECTIONS = [
+    {key:'accounts', label:'Manage Accounts', icon:'👥'},
+    {key:'rates', label:'Manage Rates', icon:'💷'},
+    {key:'calculations', label:'Manage Calculations', icon:'🧮'},
+  ];
+
+  const C = calc;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box fadeIn" style={{maxWidth:920, maxHeight:'92vh', display:'flex', flexDirection:'column', padding:0}} onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div style={{padding:'16px 20px', borderBottom:'1px solid rgba(0,0,0,0.08)', display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0}}>
+          <div style={{fontWeight:700, fontSize:18, color:'#1d1d1f', letterSpacing:'-0.02em'}}>⚙️ Settings</div>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            {toast && <span style={{fontSize:12, color:'#34c759', fontWeight:600, animation:'fadeIn 0.3s'}}>{toast}</span>}
+            <button onClick={onClose} style={{background:'#f5f5f7',border:'none',color:'#86868b',borderRadius:50,width:30,height:30,cursor:'pointer',fontSize:16,padding:0,display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+          </div>
+        </div>
+
+        <div style={{display:'flex', flex:1, overflow:'hidden', minHeight:0}}>
+          {/* Sidebar */}
+          <div style={{width:200, borderRight:'1px solid rgba(0,0,0,0.06)', padding:'12px 8px', background:'#fafafa', flexShrink:0, overflowY:'auto'}} className="settings-sidebar">
+            {SECTIONS.map(s => (
+              <button key={s.key} onClick={() => setSection(s.key)} style={{
+                display:'flex', alignItems:'center', gap:8, width:'100%', padding:'10px 12px', border:'none',
+                borderRadius:10, fontSize:13, fontWeight:section===s.key?600:400, cursor:'pointer', marginBottom:2,
+                background:section===s.key?'#fff':'transparent', color:section===s.key?'#1d1d1f':'#86868b',
+                boxShadow:section===s.key?'0 1px 3px rgba(0,0,0,0.08)':'none', transition:'all 0.15s',
+                textAlign:'left',
+              }}>
+                <span style={{fontSize:16}}>{s.icon}</span> {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div style={{flex:1, overflowY:'auto', padding:'20px 24px'}}>
+            {/* ── MANAGE ACCOUNTS ── */}
+            {section === 'accounts' && <SettingsAccounts accounts={accounts} onSave={onSaveAccounts} currentUser={currentUser}/>}
+
+            {/* ── MANAGE RATES ── */}
+            {section === 'rates' && <>
+              <div style={{fontSize:15, fontWeight:700, color:'#1d1d1f', marginBottom:4, letterSpacing:'-0.01em'}}>Manage Rates</div>
+              <div style={{fontSize:12, color:'#86868b', marginBottom:20}}>Configure shipping rates, fees, and multipliers used in profit calculations</div>
+
+              {/* Calculation Constants */}
+              <div style={{background:'#f5f5f7', borderRadius:14, padding:'16px 18px', marginBottom:20}}>
+                <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f', marginBottom:14}}>General Constants</div>
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+                  {[
+                    {key:'fuelSurcharge', label:'Fuel Surcharge', suffix:'%', display: v => (v*100).toFixed(1), parse: v => parseFloat(v)/100, desc:'Added to base shipping'},
+                    {key:'dutyPerOrder', label:'Duty per Order', suffix:'£', desc:'Fixed duty charge'},
+                    {key:'vatRate', label:'VAT Rate', suffix:'×', desc:'1.2 = 20% VAT'},
+                    {key:'amazonFeeMultiplier', label:'Amazon Revenue Multiplier', suffix:'×', desc:'0.847 = 15.3% fee'},
+                    {key:'costOverheadMultiplier', label:'Cost Overhead Multiplier', suffix:'×', desc:'1.1 = 10% overhead'},
+                    {key:'fixedOrderCost', label:'Fixed Order Cost', suffix:'$', desc:'Deducted from profit'},
+                    {key:'defaultGbpUsdRate', label:'Default GBP→USD Rate', suffix:'', desc:'Fallback exchange rate'},
+                  ].map(f => (
+                    <div key={f.key} style={{background:'#fff', borderRadius:10, padding:'10px 12px'}}>
+                      <label style={{fontSize:11, color:'#86868b', fontWeight:500, display:'block', marginBottom:4}}>{f.label}</label>
+                      <div style={{display:'flex', alignItems:'center', gap:6}}>
+                        <input className="input" type="number" step="any"
+                          style={{padding:'7px 10px', fontSize:13, width:'100%', fontFamily:'IBM Plex Mono'}}
+                          value={f.display ? f.display(C[f.key]) : C[f.key]}
+                          onChange={e => updateCalc(f.key, f.parse ? f.parse(e.target.value) : e.target.value)}
+                        />
+                        {f.suffix && <span style={{fontSize:12, color:'#86868b', fontWeight:600, flexShrink:0}}>{f.suffix}</span>}
+                      </div>
+                      <div style={{fontSize:10, color:'#aeaeb2', marginTop:4}}>{f.desc}</div>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => saveSetting('calc_constants', calc)} disabled={saving}
+                  style={{marginTop:14, background:'#0071e3', color:'#fff', border:'none', borderRadius:20, padding:'8px 20px', fontSize:12, fontWeight:600, cursor:'pointer', opacity:saving?0.6:1}}>
+                  {saving ? 'Saving…' : 'Save Constants'}
+                </button>
+              </div>
+
+              {/* Royal Mail Rate Card */}
+              <div style={{background:'#f5f5f7', borderRadius:14, padding:'16px 18px'}}>
+                <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f', marginBottom:14}}>Royal Mail UKUS Rate Card</div>
+                <div style={{overflowX:'auto'}}>
+                  <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
+                    <thead>
+                      <tr style={{borderBottom:'2px solid rgba(0,0,0,0.1)'}}>
+                        <th style={{textAlign:'left', padding:'6px 8px', fontSize:11, color:'#86868b'}}>Weight (kg)</th>
+                        <th style={{textAlign:'right', padding:'6px 8px', fontSize:11, color:'#86868b'}}>Base Price (£)</th>
+                        <th style={{textAlign:'right', padding:'6px 8px', fontSize:11, color:'#86868b'}}>Per Kg (£)</th>
+                        <th style={{textAlign:'right', padding:'6px 8px', fontSize:11, color:'#86868b'}}>Fuel (%)</th>
+                        <th style={{textAlign:'right', padding:'6px 8px', fontSize:11, color:'#86868b'}}>Duty (£)</th>
+                        <th style={{textAlign:'right', padding:'6px 8px', fontSize:11, color:'#86868b'}}>Total (1kg)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rmRates.map((r, i) => {
+                        const sampleWt = Math.min(r.wFrom + 1, r.wTo - 0.01);
+                        const sampleTotal = ((r.priceItem + r.priceKg * sampleWt) * (1 + r.fuel)) + r.duty;
+                        return (
+                          <tr key={i} style={{borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
+                            <td style={{padding:'6px 8px', color:'#1d1d1f', fontWeight:500}}>{r.wFrom}–{r.wTo} kg</td>
+                            <td style={{padding:'4px 6px', textAlign:'right'}}>
+                              <input type="number" step="0.01" value={r.priceItem} onChange={e => updateRmRate(i,'priceItem',e.target.value)}
+                                style={{width:70, padding:'4px 6px', border:'1px solid #e0e0e0', borderRadius:6, fontSize:12, textAlign:'right', fontFamily:'IBM Plex Mono'}}/>
+                            </td>
+                            <td style={{padding:'4px 6px', textAlign:'right'}}>
+                              <input type="number" step="0.01" value={r.priceKg} onChange={e => updateRmRate(i,'priceKg',e.target.value)}
+                                style={{width:60, padding:'4px 6px', border:'1px solid #e0e0e0', borderRadius:6, fontSize:12, textAlign:'right', fontFamily:'IBM Plex Mono'}}/>
+                            </td>
+                            <td style={{padding:'4px 6px', textAlign:'right'}}>
+                              <input type="number" step="0.001" value={r.fuel} onChange={e => updateRmRate(i,'fuel',e.target.value)}
+                                style={{width:60, padding:'4px 6px', border:'1px solid #e0e0e0', borderRadius:6, fontSize:12, textAlign:'right', fontFamily:'IBM Plex Mono'}}/>
+                            </td>
+                            <td style={{padding:'4px 6px', textAlign:'right'}}>
+                              <input type="number" step="0.01" value={r.duty} onChange={e => updateRmRate(i,'duty',e.target.value)}
+                                style={{width:55, padding:'4px 6px', border:'1px solid #e0e0e0', borderRadius:6, fontSize:12, textAlign:'right', fontFamily:'IBM Plex Mono'}}/>
+                            </td>
+                            <td style={{padding:'6px 8px', textAlign:'right', fontFamily:'IBM Plex Mono', fontWeight:600, color:'#0071e3'}}>£{sampleTotal.toFixed(2)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <button onClick={() => saveSetting('rm_rates', rmRates)} disabled={saving}
+                  style={{marginTop:14, background:'#0071e3', color:'#fff', border:'none', borderRadius:20, padding:'8px 20px', fontSize:12, fontWeight:600, cursor:'pointer', opacity:saving?0.6:1}}>
+                  {saving ? 'Saving…' : 'Save Rate Card'}
+                </button>
+                <button onClick={() => {setRmRates(JSON.parse(JSON.stringify(DEFAULT_RM_RATES))); setToast('Reset to defaults');setTimeout(()=>setToast(null),2000);}}
+                  style={{marginTop:14, marginLeft:8, background:'#f5f5f7', color:'#86868b', border:'1px solid #e0e0e0', borderRadius:20, padding:'8px 16px', fontSize:12, fontWeight:500, cursor:'pointer'}}>
+                  Reset to Defaults
+                </button>
+              </div>
+            </>}
+
+            {/* ── MANAGE CALCULATIONS ── */}
+            {section === 'calculations' && <>
+              <div style={{fontSize:15, fontWeight:700, color:'#1d1d1f', marginBottom:4, letterSpacing:'-0.01em'}}>Manage Calculations</div>
+              <div style={{fontSize:12, color:'#86868b', marginBottom:20}}>All formulas used when fulfilling orders and calculating profitability</div>
+
+              {/* Formula Sections */}
+              {[
+                {
+                  title: '📦 Total Buy Price (inc VAT)',
+                  formula: 'Total Buy inc VAT = (Unit Price × Quantity) + Delivery Fee',
+                  example: `E.g. Unit=£10, Qty=2, Delivery=£5 → (10 × 2) + 5 = £25.00`,
+                  fields: ['Unit Buy Price', 'B-Qty (quantity)', 'Delivery Fee per Line'],
+                  color: '#ff3b30',
+                },
+                {
+                  title: '📦 Total Buy Price (exc VAT)',
+                  formula: `Total Buy exc VAT = (Delivery Fee ÷ ${C.vatRate.toFixed(1)}) + IF(VAT=YES, (Unit × Qty) ÷ ${C.vatRate.toFixed(1)}, Unit × Qty)`,
+                  example: `VAT=YES: (5 ÷ ${C.vatRate}) + (20 ÷ ${C.vatRate}) = £${(5/C.vatRate + 20/C.vatRate).toFixed(2)}  |  VAT=NO: (5 ÷ ${C.vatRate}) + 20 = £${(5/C.vatRate + 20).toFixed(2)}`,
+                  fields: ['Delivery Fee', 'Unit Buy Price', 'B-Qty', 'VAT Status'],
+                  color: '#ff9f0a',
+                },
+                {
+                  title: '🚚 Shipping Cost (Royal Mail)',
+                  formula: 'Shipping = (Base Price + Per Kg × Weight) × (1 + Fuel Surcharge) + Duty',
+                  example: `E.g. 1.5kg: (£4.59 + £2.27 × 1.5) × ${(1+C.fuelSurcharge).toFixed(3)} + £${C.dutyPerOrder.toFixed(2)} = £${(((4.59 + 2.27*1.5) * (1+C.fuelSurcharge)) + C.dutyPerOrder).toFixed(2)}`,
+                  fields: ['Order Weight (kg)', 'RM Rate Card lookup'],
+                  color: '#0071e3',
+                },
+                {
+                  title: '💰 Revenue After Amazon Fees',
+                  formula: `Revenue USD = Sell Price × ${C.amazonFeeMultiplier} (Amazon takes ${((1-C.amazonFeeMultiplier)*100).toFixed(1)}%)`,
+                  example: `E.g. Sell=$50 → 50 × ${C.amazonFeeMultiplier} = $${(50*C.amazonFeeMultiplier).toFixed(2)}`,
+                  fields: ['Total Sell Price (USD)'],
+                  color: '#34c759',
+                },
+                {
+                  title: '💵 Total Cost in USD',
+                  formula: `Cost USD = ((Buy exc VAT × ${C.costOverheadMultiplier}) + Shipping) × GBP→USD Rate`,
+                  example: `E.g. Buy=£20, Ship=£8, Rate=${C.defaultGbpUsdRate} → ((20 × ${C.costOverheadMultiplier}) + 8) × ${C.defaultGbpUsdRate} = $${((20*C.costOverheadMultiplier + 8) * C.defaultGbpUsdRate).toFixed(2)}`,
+                  fields: ['Total Buy exc VAT', 'Shipping GBP', 'GBP→USD Rate'],
+                  color: '#ff9f0a',
+                },
+                {
+                  title: '📊 Expected Profit',
+                  formula: `Profit = Revenue USD − Cost USD − $${C.fixedOrderCost.toFixed(0)} (fixed cost)`,
+                  example: `E.g. Rev=$42.35, Cost=$38.50 → 42.35 − 38.50 − ${C.fixedOrderCost} = $${(42.35 - 38.50 - C.fixedOrderCost).toFixed(2)}`,
+                  fields: ['Revenue USD', 'Cost USD', 'Fixed Order Cost'],
+                  color: '#34c759',
+                },
+                {
+                  title: '📈 Profit Margin %',
+                  formula: 'Margin = (Expected Profit ÷ Sell Price) × 100',
+                  example: `E.g. Profit=$1.85, Sell=$50 → (1.85 ÷ 50) × 100 = 3.7%`,
+                  fields: ['Expected Profit', 'Total Sell Price'],
+                  color: '#0071e3',
+                },
+              ].map((f, i) => (
+                <div key={i} style={{background:'#f5f5f7', borderRadius:14, padding:'16px 18px', marginBottom:12}}>
+                  <div style={{fontSize:14, fontWeight:700, color:'#1d1d1f', marginBottom:8}}>{f.title}</div>
+                  <div style={{background:'#fff', borderRadius:10, padding:'12px 14px', marginBottom:8, border:'1px solid rgba(0,0,0,0.04)'}}>
+                    <div style={{fontFamily:'IBM Plex Mono', fontSize:12, color:f.color, fontWeight:600, lineHeight:1.6, wordBreak:'break-all'}}>{f.formula}</div>
+                  </div>
+                  <div style={{fontSize:11, color:'#86868b', marginBottom:8, fontFamily:'IBM Plex Mono', lineHeight:1.5}}>{f.example}</div>
+                  <div style={{display:'flex', flexWrap:'wrap', gap:4}}>
+                    {f.fields.map(fld => (
+                      <span key={fld} style={{fontSize:10, background:'rgba(0,113,227,0.08)', color:'#0071e3', padding:'3px 8px', borderRadius:6, fontWeight:500}}>{fld}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Full pipeline summary */}
+              <div style={{background:'linear-gradient(135deg,#f0f7ff,#f5f0ff)', borderRadius:14, padding:'16px 18px', marginTop:8, border:'1px solid rgba(0,113,227,0.1)'}}>
+                <div style={{fontSize:14, fontWeight:700, color:'#1d1d1f', marginBottom:10}}>🔄 Full Calculation Pipeline</div>
+                <div style={{fontFamily:'IBM Plex Mono', fontSize:11, lineHeight:2, color:'#1d1d1f'}}>
+                  <div><span style={{color:'#86868b'}}>1.</span> <span style={{color:'#ff3b30'}}>Buy inc VAT</span> = (unit × qty) + delivery</div>
+                  <div><span style={{color:'#86868b'}}>2.</span> <span style={{color:'#ff9f0a'}}>Buy exc VAT</span> = (delivery ÷ {C.vatRate}) + IF(VAT, buy÷{C.vatRate}, buy)</div>
+                  <div><span style={{color:'#86868b'}}>3.</span> <span style={{color:'#0071e3'}}>Shipping</span> = RM rate card lookup on weight</div>
+                  <div><span style={{color:'#86868b'}}>4.</span> <span style={{color:'#34c759'}}>Revenue</span> = sell × {C.amazonFeeMultiplier}</div>
+                  <div><span style={{color:'#86868b'}}>5.</span> <span style={{color:'#ff9f0a'}}>Cost USD</span> = (excVAT × {C.costOverheadMultiplier} + shipping) × rate</div>
+                  <div><span style={{color:'#86868b'}}>6.</span> <span style={{color:'#34c759',fontWeight:700}}>Profit</span> = revenue − cost − ${C.fixedOrderCost}</div>
+                  <div><span style={{color:'#86868b'}}>7.</span> <span style={{color:'#0071e3'}}>Margin%</span> = (profit ÷ sell) × 100</div>
+                </div>
+              </div>
+            </>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Settings: Manage Accounts sub-section ── */
+function SettingsAccounts({accounts, onSave, currentUser}) {
+  const [accs,setAccs]=useState([]);
+  const [n,setN]=useState({name:'',email:'',role:'packer'});
+  const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(API.getUsers());
+        if (res.ok) {
+          const data = await res.json();
+          if (data.users && data.users.length > 0) {
+            setAccs(data.users.map(u => ({
+              id: `db_${u.email}`, name: u.name || u.email, email: u.email,
+              role: u.role, approved: u.approved,
+              lastUpdated: new Date(u.updated_at).toLocaleString()
+            })));
+          }
+        }
+      } catch (err) { console.error('Error loading users:', err); }
+      setLoading(false);
+    })();
+  }, []);
+
+  React.useEffect(() => {
+    function handleUserApproved(event) {
+      const nu = event.detail;
+      setAccs(prev => prev.find(a=>a.email===nu.email) ? prev : [...prev, {id:`user_${nu.email}`, name:nu.name||nu.email, email:nu.email, role:nu.role, approved:true, lastUpdated:new Date().toLocaleString()}]);
+    }
+    function handleUserDeleted(event) {
+      const email = event.detail?.email;
+      if (email) setAccs(prev => prev.filter(a => a.email !== email));
+    }
+    window.addEventListener('user-approved', handleUserApproved);
+    window.addEventListener('user-deleted', handleUserDeleted);
+    return () => { window.removeEventListener('user-approved', handleUserApproved); window.removeEventListener('user-deleted', handleUserDeleted); };
+  }, []);
+
+  const handleRemove = async (i) => {
+    const u = accs[i];
+    if (!u?.email || !confirm(`Delete ${u.name || u.email}? They will lose access.`)) return;
+    try {
+      const res = await fetch(API.deleteUser(u.email), {method:'DELETE', headers:{'x-user-email':currentUser?.email||''}});
+      const data = await res.json();
+      if (!res.ok) { alert('Error: ' + data.error); return; }
+      setAccs(p=>p.filter((_,j)=>j!==i));
+    } catch(err) { alert('Failed: ' + err.message); }
+  };
+
+  return <>
+    <div style={{fontSize:15, fontWeight:700, color:'#1d1d1f', marginBottom:4, letterSpacing:'-0.01em'}}>Manage Accounts</div>
+    <div style={{fontSize:12, color:'#86868b', marginBottom:20}}>View and manage team members who have access to the platform</div>
+
+    {/* Existing Accounts */}
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f', marginBottom:12}}>Team Members ({accs.length})</div>
+      {loading ? <div style={{color:'#86868b',fontSize:12,padding:14}}>Loading...</div> :
+       accs.length===0 ? <div style={{color:'#86868b',fontSize:12,padding:'14px',background:'#f5f5f7',borderRadius:12}}>No accounts yet.</div> :
+      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        {accs.map((a,i)=>{
+          const lastUpdated = a.lastUpdated ? new Date(a.lastUpdated) : null;
+          const hoursAgo = lastUpdated ? (new Date() - lastUpdated) / (1000*60*60) : null;
+          const isActive = hoursAgo !== null && hoursAgo < 24;
+          return (
+            <div key={a.id||a.email} style={{background:'#f5f5f7',borderRadius:12,padding:'14px'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+                <div style={{flex:'1 1 120px',minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:'#1d1d1f',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.name}</div>
+                  <div style={{fontSize:11,color:'#86868b',fontFamily:'IBM Plex Mono',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.email}</div>
+                </div>
+                <span style={{fontSize:11,fontWeight:700,color:ROLES[a.role]?.color||'#86868b',textTransform:'uppercase',flexShrink:0}}>{ROLES[a.role]?.label||a.role}</span>
+                <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                  <span style={{width:8,height:8,borderRadius:'50%',background:isActive?'#34c759':'#d0d0d0'}}/>
+                  <span style={{fontSize:10,color:isActive?'#34c759':'#86868b'}}>{isActive?'Active':'Inactive'}</span>
+                </div>
+                <button onClick={()=>handleRemove(i)} style={{background:'#fff5f5',border:'none',color:'#ff3b30',borderRadius:20,padding:'6px 14px',cursor:'pointer',fontSize:11,fontWeight:600,flexShrink:0}}>Remove</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>}
+    </div>
+
+    <div style={{height:'1px',background:'rgba(0,0,0,0.06)',margin:'20px 0'}}/>
+
+    {/* Add New Account */}
+    <div style={{fontSize:13,fontWeight:600,color:'#1d1d1f',marginBottom:12}}>Add New Account</div>
+    <div style={{background:'#f5f5f7',borderRadius:14,padding:'16px',display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+      <div style={{flex:'1 1 140px'}}>
+        <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Full Name</label>
+        <input className="input" style={{padding:'8px 10px',fontSize:12,width:'100%'}} placeholder="Full Name" value={n.name} onChange={e=>setN(p=>({...p,name:e.target.value}))}/>
+      </div>
+      <div style={{flex:'1 1 180px'}}>
+        <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Email</label>
+        <input className="input" type="email" style={{padding:'8px 10px',fontSize:12,width:'100%'}} placeholder="email@example.com" value={n.email} onChange={e=>setN(p=>({...p,email:e.target.value}))}/>
+      </div>
+      <div style={{flex:'0 0 110px'}}>
+        <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Role</label>
+        <select value={n.role} onChange={e=>setN(p=>({...p,role:e.target.value}))} className="input" style={{padding:'8px 10px',fontSize:12,width:'100%'}}>
+          <option value="owner">Owner</option>
+          <option value="importer">Importer</option>
+          <option value="packer">Packer</option>
+          <option value="viewer">Viewer</option>
+        </select>
+      </div>
+      <button style={{background:'#0071e3',color:'#fff',border:'none',borderRadius:20,padding:'8px 14px',cursor:'pointer',fontSize:12,fontWeight:600,flexShrink:0}}
+        onClick={()=>{if(n.name&&n.email){setAccs(p=>[...p,{...n,id:Date.now()}]);setN({name:'',email:'',role:'packer'});}}}>Add</button>
+    </div>
+  </>;
+}
+
 /* ═══ USER MANAGEMENT ═══ */
 function UserManageModal({accounts,onSave,onClose}) {
   const [accs,setAccs]=useState(accounts.map(a=>({...a})));
@@ -5209,6 +5629,7 @@ function App() {
   const [activeTab, setActiveTab] = React.useState('operations');
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [showUsers, setShowUsers] = React.useState(false);
+  const [showSettings, setShowSettings] = React.useState(false);
   const [lastSync, setLastSync] = React.useState(null);
   const [liveGbpUsdRate, setLiveGbpUsdRate] = React.useState(1.34);
   
@@ -5465,8 +5886,20 @@ function App() {
   // Load initially when user is logged in
   React.useEffect(()=>{
     if(!currentUser) return;
-    console.log('✓ User logged in, loading orders from SQL...');
-    loadOrders();
+    console.log('✓ User logged in, loading settings then orders from SQL...');
+    // Load saved settings (rates/formulas) before orders so calculations use correct values
+    (async () => {
+      try {
+        const res = await fetch(API.getSettings());
+        if (res.ok) {
+          const data = await res.json();
+          if (data.rm_rates?.value) window.APP_RATES.rmRates = data.rm_rates.value;
+          if (data.calc_constants?.value) window.APP_RATES.calc = data.calc_constants.value;
+          console.log('⚙️ Settings loaded from DB');
+        }
+      } catch(e) { console.warn('Settings load skipped:', e.message); }
+      loadOrders();
+    })();
   },[currentUser]);
 
   // WebSocket real-time sync (replaces polling)
@@ -5849,7 +6282,7 @@ function App() {
           {/* User pill - Desktop only (with role request dropdown) */}
           <RoleRequestDropdown currentUser={currentUser} role={role} onRoleUpdated={handleRoleUpdated}/>
 
-          {ri.canManage&&<button style={{background:'none',border:'none',color:'#86868b',padding:'6px 8px',fontSize:18,flexShrink:0,cursor:'pointer',borderRadius:8,transition:'color 0.2s'}} onClick={()=>setShowUsers(true)} title="Manage users">⚙️</button>}
+          {ri.canManage&&<button style={{background:'none',border:'none',color:'#86868b',padding:'6px 8px',fontSize:18,flexShrink:0,cursor:'pointer',borderRadius:8,transition:'color 0.2s'}} onClick={()=>setShowSettings(true)} title="Settings">⚙️</button>}
           <button style={{background:'none',border:'none',color:'#86868b',padding:'6px 8px',fontSize:18,flexShrink:0,cursor:'pointer',borderRadius:8,transition:'color 0.2s'}} onClick={handleLogout} title="Sign out">↗</button>
         </div>
       </div>
@@ -5885,7 +6318,7 @@ function App() {
           <button key={t.k} className={`mobile-menu-item ${activeTab===t.k?'active':''}`} onClick={()=>{setActiveTab(t.k); setMobileMenuOpen(false);}}>{t.l}</button>
         )}
         <div className="mobile-menu-divider"/>
-        {ri.canManage&&<button className="mobile-menu-item" onClick={()=>{setShowUsers(true); setMobileMenuOpen(false);}}>Manage Users</button>}
+        {ri.canManage&&<button className="mobile-menu-item" onClick={()=>{setShowSettings(true); setMobileMenuOpen(false);}}>Settings</button>}
         <button className="mobile-menu-item" style={{color:'#ef4444'}} onClick={()=>{handleLogout(); setMobileMenuOpen(false);}}>Sign Out</button>
       </div>
 
@@ -5931,6 +6364,7 @@ function App() {
       </div>
 
       {showUsers&&ri.canManage&&<UserManageModal accounts={accounts} onSave={a=>{setAccounts(a);localStorage.setItem('fbm_accounts',JSON.stringify(a));fetch(API.syncAccounts(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':currentUser?.email||'unknown'},body:JSON.stringify({accounts:a})}).catch(err=>console.warn('Account sync failed:',err.message));}} onClose={()=>setShowUsers(false)}/>}
+      {showSettings&&ri.canManage&&<SettingsModal accounts={accounts} currentUser={currentUser} onSaveAccounts={a=>{setAccounts(a);localStorage.setItem('fbm_accounts',JSON.stringify(a));fetch(API.syncAccounts(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':currentUser?.email||'unknown'},body:JSON.stringify({accounts:a})}).catch(err=>console.warn('Account sync failed:',err.message));}} onClose={()=>setShowSettings(false)}/>}
       {showMultiPOModal&&<MultiPOModal order={showMultiPOModal} onClose={()=>setShowMultiPOModal(null)} onCreate={createMultiPO} getCombinedDiscrepancy={getCombinedDiscrepancy}/>}
     </div>
   );

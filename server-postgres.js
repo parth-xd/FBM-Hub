@@ -279,6 +279,17 @@ const initializeDatabase = async () => {
 
     console.log('✅ Database tables created successfully');
 
+    // ═══ Settings table for rates/formulas ═══
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value JSONB NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_by VARCHAR(255)
+      )
+    `);
+    console.log('✅ Settings table verified');
+
     // ═══ ONE-TIME FIX: Correct order dates that are in the future ═══
     // If order_date is more than 30 days in the future, it's almost certainly wrong — subtract 1 year
     try {
@@ -1302,6 +1313,45 @@ app.post('/api/users/activity/ping', async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     console.error('Activity ping error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ═══ SETTINGS (Rates & Formulas) ═══
+
+app.get('/api/settings', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT key, value, updated_at, updated_by FROM settings');
+    const settings = {};
+    for (const row of result.rows) {
+      settings[row.key] = { value: row.value, updated_at: row.updated_at, updated_by: row.updated_by };
+    }
+    res.json(settings);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/settings/:key', async (req, res) => {
+  try {
+    const { key } = req.params;
+    const { value } = req.body;
+    const email = req.headers['x-user-email'] || 'unknown';
+
+    // Validate key is alphanumeric/underscore only
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
+      return res.status(400).json({ error: 'Invalid setting key' });
+    }
+
+    await pool.query(
+      `INSERT INTO settings (key, value, updated_at, updated_by) VALUES ($1, $2, NOW(), $3)
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW(), updated_by = $3`,
+      [key, JSON.stringify(value), email]
+    );
+    console.log(`⚙️ Setting updated: ${key} by ${email}`);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Settings update error:', error);
     res.status(500).json({ error: error.message });
   }
 });
