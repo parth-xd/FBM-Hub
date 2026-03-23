@@ -4018,6 +4018,7 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
 
     {/* Add New Account */}
     <div style={{fontSize:13,fontWeight:600,color:'#1d1d1f',marginBottom:12}}>Add New Account</div>
+    {!isSuperOwner && <div style={{fontSize:11,color:'#8e8e93',marginBottom:12,padding:'10px 12px',background:'#fff5f5',borderRadius:8}}>Note: Only parttthh@gmail.com can assign the Owner role. You can add new users with Importer, Packer, or Viewer roles.</div>}
     <div style={{background:'#f5f5f7',borderRadius:14,padding:'16px',display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
       <div style={{flex:'1 1 140px'}}>
         <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Full Name</label>
@@ -4035,6 +4036,7 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
       </div>
       <button style={{background:'#0071e3',color:'#fff',border:'none',borderRadius:20,padding:'8px 14px',cursor:'pointer',fontSize:12,fontWeight:600,flexShrink:0}}
         onClick={async ()=>{if(n.name&&n.email){
+          if(n.role==='owner'&&!isSuperOwner){alert('Only the primary owner (parttthh@gmail.com) can assign the owner role.');return;}
           try {
             const res = await fetch(API.syncAccounts(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':currentUser?.email||''},body:JSON.stringify({accounts:[{email:n.email,name:n.name,role:n.role}]})});
             const data = await res.json();
