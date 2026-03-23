@@ -200,12 +200,12 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   .modal-box table { font-size: 11px; }
   .modal-box table th, .modal-box table td { padding: 6px 8px; }
   .hide-mobile { display: none !important; }
-  .modal-box > div:has(.settings-sidebar) { flex-direction: column !important; }
-  .settings-sidebar { width: 100% !important; height: auto !important; padding: 0 !important; border-right: none !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 0 !important; margin-bottom: 0 !important; overflow-y: visible !important; }
-  .settings-sidebar button { padding: 12px 8px !important; font-size: 12px !important; font-weight: 600 !important; border: none !important; border-radius: 0 !important; border-bottom: 3px solid transparent !important; background: transparent !important; color: #86868b !important; margin: 0 !important; white-space: normal !important; word-wrap: break-word !important; line-height: 1.2 !important; }
+  .modal-box > div:has(.settings-sidebar) { flex-direction: column !important; height: auto !important; }
+  .settings-sidebar { width: 100% !important; height: 48px !important; padding: 0 !important; border-right: none !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; display: flex !important; flex-direction: row !important; justify-content: space-around !important; align-items: center !important; overflow: visible !important; flex-wrap: nowrap !important; }
+  .settings-sidebar button { flex: 1 1 33% !important; padding: 12px 4px !important; font-size: 11px !important; font-weight: 600 !important; border: none !important; border-radius: 0 !important; border-bottom: 3px solid transparent !important; background: transparent !important; color: #86868b !important; margin: 0 !important; white-space: nowrap !important; text-overflow: ellipsis !important; overflow: hidden !important; height: 48px !important; display: flex !important; align-items: center !important; justify-content: center !important; }
   .settings-sidebar button:hover { background: rgba(0,0,0,0.05) !important; }
   .settings-sidebar button span { display: none !important; }
-  .modal-box > div:has(.settings-sidebar) > div:last-child { width: 100% !important; padding: 14px 12px !important; }
+  .modal-box > div:has(.settings-sidebar) > div:last-child { width: 100% !important; max-height: calc(85vh - 48px) !important; padding: 12px 10px !important; overflow-y: auto !important; }
   .modal-box { max-height: 85vh !important; }
 }
 
