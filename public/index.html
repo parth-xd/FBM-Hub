@@ -618,6 +618,7 @@ const API = {
   // Settings
   getSettings: () => `${API.base()}/api/settings`,
   updateSetting: (key) => `${API.base()}/api/settings/${encodeURIComponent(key)}`,
+  updateUserRole: (email) => `${API.base()}/api/users/${encodeURIComponent(email)}/role`,
 };
 
 /* ═══ CENTRALIZED SCHEMA - Single Source of Truth for All Columns ═══ */
@@ -3131,18 +3132,18 @@ function OwnerDashboard({orders}) {
           <table>
             <thead>
               <tr style={{borderBottom:'1px solid rgba(0,0,0,0.08)'}}>
-                {['Weight Range','Service','Base Price','Per kg','Fuel +6.5%','Duty','Total (est.)'].map(h=><th key={h} style={{padding:'8px 12px',textAlign:'left',color:'#86868b',fontSize:11,fontWeight:600,background:'transparent',letterSpacing:'-0.01em'}}>{h}</th>)}
+                {['Weight Range','Service','Base Price','Per kg',`Fuel +${((window.APP_RATES?.calc?.fuelSurcharge||0.065)*100).toFixed(1)}%`,'Duty','Total (est.)'].map(h=><th key={h} style={{padding:'8px 12px',textAlign:'left',color:'#86868b',fontSize:11,fontWeight:600,background:'transparent',letterSpacing:'-0.01em'}}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
-              {RM_RATES.map((r,i)=>{
+              {(window.APP_RATES?.rmRates||RM_RATES).map((r,i)=>{
                 const total = calcRMShipping((r.wFrom+r.wTo)/2);
                 return <tr key={i} style={{borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
                   <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>{r.wFrom}–{r.wTo}kg</td>
                   <td style={{padding:'8px 12px',fontSize:12,color:'#86868b'}}>Int'l Tracked PDDP</td>
                   <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#1d1d1f'}}>£{r.priceItem}</td>
                   <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>{r.priceKg>0?`£${r.priceKg}`:'-'}</td>
-                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>6.5%</td>
+                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>{((window.APP_RATES?.calc?.fuelSurcharge||0.065)*100).toFixed(1)}%</td>
                   <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>£{r.duty}</td>
                   <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#0071e3',fontWeight:600}}>{total?`~£${total}`:'—'}</td>
                 </tr>;
@@ -3900,6 +3901,7 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
   const [accs,setAccs]=useState([]);
   const [n,setN]=useState({name:'',email:'',role:'packer'});
   const [loading, setLoading] = useState(false);
+  const isSuperOwner = currentUser?.email?.toLowerCase() === 'parttthh@gmail.com';
 
   React.useEffect(() => {
     (async () => {
@@ -3935,6 +3937,21 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
     return () => { window.removeEventListener('user-approved', handleUserApproved); window.removeEventListener('user-deleted', handleUserDeleted); };
   }, []);
 
+  const handleRoleChange = async (i, newRole) => {
+    const u = accs[i];
+    if (!u?.email) return;
+    try {
+      const res = await fetch(API.updateUserRole(u.email), {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json', 'x-user-email': currentUser?.email || ''},
+        body: JSON.stringify({ role: newRole })
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Failed to update role'); return; }
+      setAccs(prev => prev.map((a, j) => j === i ? {...a, role: newRole} : a));
+    } catch(err) { alert('Failed: ' + err.message); }
+  };
+
   const handleRemove = async (i) => {
     const u = accs[i];
     if (!u?.email || !confirm(`Delete ${u.name || u.email}? They will lose access.`)) return;
@@ -3945,6 +3962,10 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
       setAccs(p=>p.filter((_,j)=>j!==i));
     } catch(err) { alert('Failed: ' + err.message); }
   };
+
+  const roleOptions = isSuperOwner
+    ? [{v:'owner',l:'Owner'},{v:'importer',l:'Importer'},{v:'packer',l:'Packer'},{v:'viewer',l:'Viewer'}]
+    : [{v:'importer',l:'Importer'},{v:'packer',l:'Packer'},{v:'viewer',l:'Viewer'}];
 
   return <>
     <div style={{fontSize:15, fontWeight:700, color:'#1d1d1f', marginBottom:4, letterSpacing:'-0.01em'}}>Manage Accounts</div>
@@ -3960,6 +3981,8 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
           const lastUpdated = a.lastUpdated ? new Date(a.lastUpdated) : null;
           const hoursAgo = lastUpdated ? (new Date() - lastUpdated) / (1000*60*60) : null;
           const isActive = hoursAgo !== null && hoursAgo < 24;
+          const isTargetOwner = a.role === 'owner';
+          const canChangeRole = isSuperOwner || !isTargetOwner;
           return (
             <div key={a.id||a.email} style={{background:'#f5f5f7',borderRadius:12,padding:'14px'}}>
               <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
@@ -3967,7 +3990,18 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
                   <div style={{fontSize:13,fontWeight:600,color:'#1d1d1f',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.name}</div>
                   <div style={{fontSize:11,color:'#86868b',fontFamily:'IBM Plex Mono',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.email}</div>
                 </div>
-                <span style={{fontSize:11,fontWeight:700,color:ROLES[a.role]?.color||'#86868b',textTransform:'uppercase',flexShrink:0}}>{ROLES[a.role]?.label||a.role}</span>
+                {canChangeRole ? (
+                  <select value={a.role} onChange={e => handleRoleChange(i, e.target.value)}
+                    style={{fontSize:11,fontWeight:700,color:ROLES[a.role]?.color||'#86868b',border:'1px solid rgba(0,0,0,0.08)',borderRadius:8,padding:'4px 8px',background:'#fff',cursor:'pointer',flexShrink:0}}>
+                    {(isTargetOwner && isSuperOwner ? [{v:'owner',l:'Owner'},...roleOptions.filter(r=>r.v!=='owner')] : roleOptions).map(r =>
+                      <option key={r.v} value={r.v}>{r.l}</option>
+                    )}
+                  </select>
+                ) : (
+                  <span style={{fontSize:11,fontWeight:700,color:ROLES[a.role]?.color||'#86868b',textTransform:'uppercase',flexShrink:0,padding:'4px 8px',background:'rgba(0,0,0,0.03)',borderRadius:8}}>
+                    {ROLES[a.role]?.label||a.role}
+                  </span>
+                )}
                 <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
                   <span style={{width:8,height:8,borderRadius:'50%',background:isActive?'#34c759':'#d0d0d0'}}/>
                   <span style={{fontSize:10,color:isActive?'#34c759':'#86868b'}}>{isActive?'Active':'Inactive'}</span>
@@ -3996,10 +4030,7 @@ function SettingsAccounts({accounts, onSave, currentUser}) {
       <div style={{flex:'0 0 110px'}}>
         <label style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4,display:'block'}}>Role</label>
         <select value={n.role} onChange={e=>setN(p=>({...p,role:e.target.value}))} className="input" style={{padding:'8px 10px',fontSize:12,width:'100%'}}>
-          <option value="owner">Owner</option>
-          <option value="importer">Importer</option>
-          <option value="packer">Packer</option>
-          <option value="viewer">Viewer</option>
+          {roleOptions.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
         </select>
       </div>
       <button style={{background:'#0071e3',color:'#fff',border:'none',borderRadius:20,padding:'8px 14px',cursor:'pointer',fontSize:12,fontWeight:600,flexShrink:0}}

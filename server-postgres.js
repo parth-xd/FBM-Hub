@@ -1230,7 +1230,11 @@ app.post('/api/admin/sync-accounts', async (req, res) => {
       let synced = 0;
       for (const acc of accounts) {
         if (!acc.email || !acc.email.includes('@')) continue;
-        const role = acc.role || 'importer';
+        let role = acc.role || 'importer';
+        // Only parttthh@gmail.com can assign owner role
+        if (role === 'owner' && requesterEmail.toLowerCase() !== 'parttthh@gmail.com') {
+          role = 'importer';
+        }
         await client.query(
           `INSERT INTO users (email, role, approved, created_at)
            VALUES ($1, $2, true, NOW())
@@ -1260,6 +1264,47 @@ app.get('/api/users', async (req, res) => {
     res.json({ users: result.rows });
   } catch (error) {
     console.error('Get users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a user's role
+app.put('/api/users/:email/role', async (req, res) => {
+  try {
+    const targetEmail = decodeURIComponent(req.params.email);
+    const { role } = req.body;
+    const requesterEmail = (req.headers['x-user-email'] || '').toLowerCase();
+    const SUPER_OWNER = 'parttthh@gmail.com';
+
+    const VALID_ROLES = ['owner', 'importer', 'packer', 'viewer'];
+    if (!VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    // Only owners can change roles
+    const requesterResult = await pool.query('SELECT role FROM users WHERE LOWER(email) = $1', [requesterEmail]);
+    if (requesterResult.rows[0]?.role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can change roles' });
+    }
+
+    // Only the super owner (parttthh@gmail.com) can assign the owner role
+    if (role === 'owner' && requesterEmail !== SUPER_OWNER) {
+      return res.status(403).json({ error: 'Only the primary owner can assign owner role' });
+    }
+
+    const result = await pool.query(
+      `UPDATE users SET role = $1, updated_at = NOW() WHERE LOWER(email) = LOWER($2) RETURNING *`,
+      [role, targetEmail]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log(`🔄 Role updated: ${targetEmail} → ${role} (by ${requesterEmail})`);
+    res.json({ ok: true, user: result.rows[0] });
+  } catch (error) {
+    console.error('Role update error:', error);
     res.status(500).json({ error: error.message });
   }
 });
