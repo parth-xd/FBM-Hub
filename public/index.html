@@ -3337,10 +3337,12 @@ function AuditLogView() {
 }
 /* ═══ INS LISTINGS VIEW ═══ */
 function INSView({orders}) {
+  const [selectedItem, setSelectedItem] = React.useState(null);
   const insItems = useMemo(()=>orders.filter(o=>{
     const pb = String(o.purchasedBy||'').toLowerCase();
     return pb.includes('in stock') || pb.includes('bletchley') || pb.includes('ins');
   }),[orders]);
+  
   return (
     <div style={{padding:'20px 24px',overflowY:'auto',height:'calc(100vh - 52px)'}}>
       <div style={{fontSize:15,color:'#1d1d1f',marginBottom:18,letterSpacing:'-0.01em',fontWeight:600}}>INS Stock <span style={{color:'#86868b',fontWeight:400,fontSize:13}}>· {insItems.length} items</span></div>
@@ -3349,7 +3351,7 @@ function INSView({orders}) {
       ):(
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:12}}>
         {insItems.map((item,i)=>(
-          <div key={i} className="card" style={{padding:18}}>
+          <div key={i} className="card" onClick={()=>setSelectedItem(item)} style={{padding:18,cursor:'pointer',transition:'all 0.2s',border:'1px solid rgba(0,0,0,0.1)'}}>
             <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
               <div style={{background:'#f5f5f7',borderRadius:20,padding:'4px 10px',fontSize:10,fontWeight:600,color:'#86868b',fontFamily:'IBM Plex Mono',flexShrink:0,height:'fit-content',marginTop:2}}>
                 IN STOCK
@@ -3368,6 +3370,61 @@ function INSView({orders}) {
           </div>
         ))}
       </div>
+      )}
+      
+      {selectedItem && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,backdropFilter:'blur(10px)'}}>
+          <div className="modal-box" style={{maxHeight:'90vh',maxWidth:'800px',width:'90%',overflowY:'auto',position:'relative',margin:'auto'}}>
+            <button onClick={()=>setSelectedItem(null)} style={{position:'absolute',top:14,right:14,background:'#f5f5f7',border:'none',borderRadius:'50%',width:32,height:32,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>×</button>
+            
+            <div style={{padding:'20px 24px'}}>
+              <div style={{fontSize:16,fontWeight:600,color:'#1d1d1f',marginBottom:2}}>{selectedItem.productName}</div>
+              <div style={{fontSize:13,color:'#86868b',marginBottom:20,fontFamily:'IBM Plex Mono'}}>{selectedItem.asin}</div>
+              
+              {/* Details Grid */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:16,marginBottom:20}}>
+                {[
+                  {label:'Order ID',value:selectedItem.orderId||'-'},
+                  {label:'SKU',value:selectedItem.sku||'-'},
+                  {label:'PO ID',value:selectedItem.poId||'-'},
+                  {label:'Order Date',value:selectedItem.orderDate?new Date(selectedItem.orderDate).toLocaleDateString():'—'},
+                  {label:'Sell Qty',value:selectedItem.sQty||'-'},
+                  {label:'Buy Qty',value:selectedItem.bQty||'-'},
+                  {label:'Sell Price',value:selectedItem.totalSellPrice?`£${selectedItem.totalSellPrice.toFixed(2)}`:'—'},
+                  {label:'Buy Price (Inc VAT)',value:selectedItem.totalBuyPriceIncVAT?`£${selectedItem.totalBuyPriceIncVAT.toFixed(2)}`:'—'},
+                  {label:'Expected Profit',value:selectedItem.expectedProfit?`£${selectedItem.expectedProfit.toFixed(2)}`:'—'},
+                  {label:'Purchased By',value:selectedItem.purchasedBy||'-'},
+                  {label:'Checked By',value:selectedItem.checkedBy||'-'},
+                  {label:'VAT Status',value:selectedItem.vatStatus||'-'},
+                  {label:'Shipping Cost',value:selectedItem.shippingCostGBP?`£${selectedItem.shippingCostGBP.toFixed(2)}`:'—'},
+                  {label:'Order Weight',value:selectedItem.orderWeight?`${selectedItem.orderWeight}kg`:'—'},
+                  {label:'Ship By Date',value:selectedItem.shipByDate?new Date(selectedItem.shipByDate).toLocaleDateString():'—'},
+                  {label:'Expected Delivery',value:selectedItem.expectedDeliveryDate?new Date(selectedItem.expectedDeliveryDate).toLocaleDateString():'—'}
+                ].map((detail,idx)=>(
+                  <div key={idx}>
+                    <div style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4}}>{detail.label}</div>
+                    <div style={{fontSize:13,color:'#1d1d1f',fontWeight:600,fontFamily:'IBM Plex Mono'}}>{detail.value}</div>
+                  </div>
+                ))}
+              </div>
+              
+              {selectedItem.buyLink && (
+                <div style={{marginBottom:16,padding:12,background:'#f5f5f7',borderRadius:12}}>
+                  <div style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:6}}>Buy Link</div>
+                  <a href={selectedItem.buyLink} target="_blank" rel="noopener noreferrer" style={{color:'#0071e3',fontSize:12,fontWeight:500,wordBreak:'break-all',textDecoration:'none'}}>
+                    {selectedItem.buyLink.length > 60 ? selectedItem.buyLink.substring(0,57)+'...' : selectedItem.buyLink}
+                  </a>
+                </div>
+              )}
+              
+              <div style={{display:'flex',gap:10}}>
+                <button onClick={()=>setSelectedItem(null)} style={{flex:1,padding:'12px 16px',background:'#f5f5f7',border:'none',borderRadius:12,color:'#1d1d1f',fontSize:13,fontWeight:600,cursor:'pointer'}}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
