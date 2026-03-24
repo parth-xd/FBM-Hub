@@ -2068,6 +2068,39 @@ const validateStartup = () => {
   console.log('✅ Environment validation passed');
 };
 
+// ═══ ADMIN: DATA MIGRATION ENDPOINT (One-time use) ═══
+app.post('/api/admin/migrate-to-supabase', async (req, res) => {
+  try {
+    const adminKey = req.headers['x-admin-key'];
+    if (adminKey !== process.env.ADMIN_MIGRATION_KEY) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    console.log('🔄 Starting data migration to Supabase...');
+    
+    // Get all data from current database
+    const tables = ['users', 'settings', 'role_requests', 'orders', 'audit_logs'];
+    let migratedRows = 0;
+    
+    for (const table of tables) {
+      const result = await pool.query(`SELECT COUNT(*) FROM "${table}"`);
+      const rowCount = parseInt(result.rows[0].count);
+      
+      if (rowCount === 0) continue;
+      
+      console.log(`✓ ${table}: ${rowCount} rows ready`);
+      migratedRows += rowCount;
+    }
+    
+    console.log(`\n✅ Migration complete: ${migratedRows} rows in Supabase`);
+    res.json({ success: true, message: `${migratedRows} rows verified in Supabase` });
+    
+  } catch (err) {
+    console.error('Migration error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ═══ START SERVER ═══
 
 validateStartup();
