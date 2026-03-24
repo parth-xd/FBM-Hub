@@ -3342,7 +3342,8 @@ function INSView({orders}) {
     const pb = String(o.purchasedBy||'').toLowerCase();
     const isINS = pb.includes('in stock') || pb.includes('bletchley') || pb.includes('ins');
     const isShipped = o.markedDispatchedOn !== null && o.markedDispatchedOn !== undefined;
-    return isINS && !isShipped; // Only show INS items that haven't been shipped
+    const isFulfilled = o.labelPrinted === true;
+    return isINS && !isShipped && !isFulfilled; // Only show INS items that are still pending
   }),[orders]);
   
   return (
@@ -3354,24 +3355,11 @@ function INSView({orders}) {
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:12}}>
         {insItems.map((item,i)=>{
           const isShipped = item.markedDispatchedOn !== null && item.markedDispatchedOn !== undefined;
-          const isFulfilled = item.labelPrinted === true;
           return (
           <div key={i} className="card" onClick={()=>setSelectedItem(item)} style={{padding:18,cursor:'pointer',transition:'all 0.2s',border:'1px solid rgba(0,0,0,0.1)'}}>
             <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-              <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                <div style={{background:'#f5f5f7',borderRadius:20,padding:'4px 10px',fontSize:10,fontWeight:600,color:'#86868b',fontFamily:'IBM Plex Mono',flexShrink:0,height:'fit-content'}}>
-                  IN STOCK
-                </div>
-                {isShipped && (
-                  <div style={{background:'#d1f4e0',borderRadius:20,padding:'4px 8px',fontSize:10,fontWeight:600,color:'#34c759',fontFamily:'IBM Plex Mono',flexShrink:0}}>
-                    SHIPPED
-                  </div>
-                )}
-                {isFulfilled && !isShipped && (
-                  <div style={{background:'#fff3cd',borderRadius:20,padding:'4px 8px',fontSize:10,fontWeight:600,color:'#ff9500',fontFamily:'IBM Plex Mono',flexShrink:0}}>
-                    FULFILLED
-                  </div>
-                )}
+              <div style={{background:'#f5f5f7',borderRadius:20,padding:'4px 10px',fontSize:10,fontWeight:600,color:'#86868b',fontFamily:'IBM Plex Mono',flexShrink:0,height:'fit-content'}}>
+                IN STOCK
               </div>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:600,color:'#1d1d1f',lineHeight:1.4,marginBottom:4}}>{item.productName}</div>
