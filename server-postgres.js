@@ -5,7 +5,7 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const Pool = require('pg').Pool;
+const { Pool, Client } = require('pg');
 const WebSocket = require('ws');
 const http = require('http');
 const crypto = require('crypto');
@@ -2091,7 +2091,6 @@ app.post('/api/admin/migrate-to-supabase', async (req, res) => {
     
     // Now connect to old Render database
     console.log('Connecting to old Render database...');
-    const { Client } = require('pg');
     const oldClient = new Client({
       host: 'dpg-d6qtrpbuibrs739h8lhg-a.oregon-postgres.render.com',
       port: 5432,
