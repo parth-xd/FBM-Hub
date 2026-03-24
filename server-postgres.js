@@ -2071,9 +2071,11 @@ const validateStartup = () => {
 // ═══ ADMIN: DATA MIGRATION ENDPOINT (One-time use) ═══
 app.post('/api/admin/migrate-to-supabase', async (req, res) => {
   try {
-    const adminKey = req.headers['x-admin-key'];
-    if (adminKey !== process.env.ADMIN_MIGRATION_KEY) {
-      return res.status(403).json({ error: 'Unauthorized' });
+    const requesterEmail = req.headers['x-user-email'] || '';
+    
+    // Only super owner can run migrations
+    if (requesterEmail.toLowerCase() !== 'parttthh@gmail.com') {
+      return res.status(403).json({ error: 'Only super owner can run migrations' });
     }
 
     console.log('🔄 Starting data migration to Supabase...');
