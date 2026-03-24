@@ -2080,7 +2080,17 @@ app.post('/api/admin/migrate-to-supabase', async (req, res) => {
 
     console.log('🔄 Starting data migration to Supabase...');
     
-    // Connect to old Render database
+    // Test current database connection first
+    try {
+      const testQuery = await pool.query('SELECT COUNT(*) FROM users');
+      console.log(`✅ Connected to Supabase. Current users table: ${testQuery.rows[0].count} rows`);
+    } catch (err) {
+      console.error('❌ Supabase connection failed:', err.message);
+      return res.status(500).json({ error: 'Cannot connect to Supabase database', details: err.message });
+    }
+    
+    // Now connect to old Render database
+    console.log('Connecting to old Render database...');
     const { Client } = require('pg');
     const oldClient = new Client({
       host: 'dpg-d6qtrpbuibrs739h8lhg-a.oregon-postgres.render.com',
@@ -2092,8 +2102,13 @@ app.post('/api/admin/migrate-to-supabase', async (req, res) => {
       rejectUnauthorized: false
     });
     
-    await oldClient.connect();
-    console.log('✅ Connected to old Render database');
+    try {
+      await oldClient.connect();
+      console.log('✅ Connected to old Render database');
+    } catch (err) {
+      console.error('❌ Render connection failed:', err.message);
+      return res.status(500).json({ error: 'Cannot connect to old Render database', details: err.message });
+    }
     
     // Disable foreign key constraints temporarily
     await pool.query('SET session_replication_role = REPLICA');
@@ -2111,6 +2126,7 @@ app.post('/api/admin/migrate-to-supabase', async (req, res) => {
     ];
     
     let totalMigratedRows = 0;
+    const results = [];
     
     for (const table of tables) {
       try {
@@ -2120,6 +2136,7 @@ app.post('/api/admin/migrate-to-supabase', async (req, res) => {
         
         if (rows.length === 0) {
           console.log(`⏭️  ${table}: 0 rows (skipped)`);
+          results.push({table, rows: 0, status: 'skipped'});
           continue;
         }
         
@@ -2150,10 +2167,12 @@ app.post('/api/admin/migrate-to-supabase', async (req, res) => {
         }
         
         console.log(`✅ ${table}: ${rows.length} rows migrated`);
+        results.push({table, rows: rows.length, status: 'migrated'});
         totalMigratedRows += rows.length;
         
       } catch (err) {
         console.error(`❌ Error migrating ${table}:`, err.message);
+        results.push({table, error: err.message, status: 'failed'});
       }
     }
     
@@ -2162,7 +2181,7 @@ app.post('/api/admin/migrate-to-supabase', async (req, res) => {
     await oldClient.end();
     
     console.log(`\n✅ Migration complete: ${totalMigratedRows} rows transferred to Supabase`);
-    res.json({ success: true, message: `${totalMigratedRows} rows successfully migrated` });
+    res.json({ success: true, message: `${totalMigratedRows} rows successfully migrated`, results });
     
   } catch (err) {
     console.error('❌ Migration error:', err);
