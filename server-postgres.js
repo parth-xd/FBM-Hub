@@ -5,7 +5,7 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { Pool, Client } = require('pg');
+const { Pool } = require('pg');
 const WebSocket = require('ws');
 const http = require('http');
 const crypto = require('crypto');
@@ -2068,125 +2068,7 @@ const validateStartup = () => {
   console.log('✅ Environment validation passed');
 };
 
-// ═══ ADMIN: DATA MIGRATION ENDPOINT (One-time use) ═══
-app.post('/api/admin/migrate-to-supabase', async (req, res) => {
-  try {
-    const requesterEmail = req.headers['x-user-email'] || '';
-    
-    // Only super owner can run migrations
-    if (requesterEmail.toLowerCase() !== 'parttthh@gmail.com') {
-      return res.status(403).json({ error: 'Only super owner can run migrations' });
-    }
 
-    console.log('🔄 Starting data migration to Supabase...');
-    
-    // Test current database connection first
-    try {
-      const testQuery = await pool.query('SELECT COUNT(*) FROM users');
-      console.log(`✅ Connected to Supabase. Current users table: ${testQuery.rows[0].count} rows`);
-    } catch (err) {
-      console.error('❌ Supabase connection failed:', err.message);
-      return res.status(500).json({ error: 'Cannot connect to Supabase database', details: err.message });
-    }
-    
-    // Now connect to old Render database
-    console.log('Connecting to old Render database...');
-    const oldClient = new Client({
-      host: 'dpg-d6qtrpbuibrs739h8lhg-a.oregon-postgres.render.com',
-      port: 5432,
-      user: 'fbm_hub_prod_user',
-      password: 'z43mWrvEALD72DpvwKh8TvSNWUGSMGmJ',
-      database: 'fbm_hub_prod',
-      ssl: true,
-      rejectUnauthorized: false
-    });
-    
-    try {
-      await oldClient.connect();
-      console.log('✅ Connected to old Render database');
-    } catch (err) {
-      console.error('❌ Render connection failed:', err.message);
-      return res.status(500).json({ error: 'Cannot connect to old Render database', details: err.message });
-    }
-    
-    // Disable foreign key constraints temporarily
-    await pool.query('SET session_replication_role = REPLICA');
-    
-    const tables = [
-      'audit_logs',
-      'fba_approvals',
-      'fba_products',
-      'fba_stb_counter',
-      'import_tracking',
-      'orders',
-      'role_requests',
-      'settings',
-      'users'
-    ];
-    
-    let totalMigratedRows = 0;
-    const results = [];
-    
-    for (const table of tables) {
-      try {
-        // Get all data from old DB
-        const result = await oldClient.query(`SELECT * FROM public."${table}"`);
-        const rows = result.rows;
-        
-        if (rows.length === 0) {
-          console.log(`⏭️  ${table}: 0 rows (skipped)`);
-          results.push({table, rows: 0, status: 'skipped'});
-          continue;
-        }
-        
-        // Delete existing data in Supabase
-        await pool.query(`DELETE FROM public."${table}"`);
-        
-        // Insert in batches
-        const batchSize = 100;
-        for (let i = 0; i < rows.length; i += batchSize) {
-          const batch = rows.slice(i, i + batchSize);
-          const columns = Object.keys(batch[0]);
-          const columnList = columns.map(c => `"${c}"`).join(', ');
-          
-          const placeholders = batch.map((_, idx) => {
-            const colCount = columns.length;
-            return '(' + Array.from({length: colCount}, (_, j) => `$${idx * colCount + j + 1}`).join(', ') + ')';
-          }).join(', ');
-          
-          const values = [];
-          batch.forEach(row => {
-            columns.forEach(col => {
-              values.push(row[col]);
-            });
-          });
-          
-          const query = `INSERT INTO public."${table}" (${columnList}) VALUES ${placeholders}`;
-          await pool.query(query, values);
-        }
-        
-        console.log(`✅ ${table}: ${rows.length} rows migrated`);
-        results.push({table, rows: rows.length, status: 'migrated'});
-        totalMigratedRows += rows.length;
-        
-      } catch (err) {
-        console.error(`❌ Error migrating ${table}:`, err.message);
-        results.push({table, error: err.message, status: 'failed'});
-      }
-    }
-    
-    // Re-enable foreign key constraints
-    await pool.query('SET session_replication_role = DEFAULT');
-    await oldClient.end();
-    
-    console.log(`\n✅ Migration complete: ${totalMigratedRows} rows transferred to Supabase`);
-    res.json({ success: true, message: `${totalMigratedRows} rows successfully migrated`, results });
-    
-  } catch (err) {
-    console.error('❌ Migration error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // ═══ START SERVER ═══
 
