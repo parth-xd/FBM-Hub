@@ -1565,36 +1565,274 @@ app.post('/api/role-requests/:id/decide', async (req, res) => {
 });
 
 // ═══ EXCHANGE RATE (cached) ═══
-let _cachedRate = { value: 1.34, fetchedAt: 0 };
+// ═══ EXCHANGE RATE (generic, cached per pair) ═══
+const _rateCache = {}; // keyed by "FROM_TO"
 const RATE_CACHE_MS = 15 * 60 * 1000; // 15 min cache
 
-async function fetchLiveGbpUsdRate() {
-  if (Date.now() - _cachedRate.fetchedAt < RATE_CACHE_MS) return _cachedRate.value;
+async function fetchLiveRate(from, to) {
+  if (from === to) return 1;
+  const cacheKey = `${from}_${to}`;
+  const cached = _rateCache[cacheKey];
+  if (cached && Date.now() - cached.fetchedAt < RATE_CACHE_MS) return cached.value;
   try {
-    // frankfurter.app is free, no API key needed
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch('https://api.frankfurter.app/latest?from=GBP&to=USD', { signal: controller.signal });
+    const res = await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { signal: controller.signal });
     clearTimeout(timeout);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const rate = data?.rates?.USD;
-    if (rate && typeof rate === 'number' && rate > 0.5 && rate < 3) {
-      _cachedRate = { value: rate, fetchedAt: Date.now() };
-      console.log(`✅ GBP/USD rate updated: ${rate}`);
+    const rate = data?.rates?.[to];
+    if (rate && typeof rate === 'number' && rate > 0) {
+      _rateCache[cacheKey] = { value: rate, fetchedAt: Date.now() };
+      console.log(`✅ ${from}/${to} rate updated: ${rate}`);
+      return rate;
     }
   } catch (err) {
-    console.warn('Exchange rate fetch failed, using cached:', err.message);
+    console.warn(`Exchange rate fetch failed for ${from}→${to}, using cached:`, err.message);
   }
-  return _cachedRate.value;
+  return cached?.value || null;
+}
+
+// Backward-compat wrapper
+async function fetchLiveGbpUsdRate() {
+  const rate = await fetchLiveRate('GBP', 'USD');
+  return rate || 1.34;
+}
+
+// Fetch historical rate for a specific date
+async function fetchHistoricalRate(from, to, dateStr) {
+  if (from === to) return 1;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`https://api.frankfurter.app/${dateStr}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const rate = data?.rates?.[to];
+    if (rate && typeof rate === 'number' && rate > 0) return rate;
+  } catch (err) {
+    console.warn(`Historical rate fetch failed for ${from}→${to} on ${dateStr}:`, err.message);
+  }
+  return null;
 }
 
 app.get('/api/exchange-rate/current', async (req, res) => {
   try {
-    const rate = await fetchLiveGbpUsdRate();
-    res.json({ gbp_usd_rate: rate, cached: Date.now() - _cachedRate.fetchedAt < 1000 ? false : true });
+    // Support generic ?from=X&to=Y, default GBP→USD for backward compat
+    const from = (req.query.from || 'GBP').toUpperCase();
+    const to = (req.query.to || 'USD').toUpperCase();
+    const rate = await fetchLiveRate(from, to);
+    if (!rate) return res.status(500).json({ error: 'Failed to fetch rate' });
+    // Keep backward compat key
+    res.json({ gbp_usd_rate: rate, rate, from, to, cached: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch rate', gbp_usd_rate: _cachedRate.value });
+    res.status(500).json({ error: 'Failed to fetch rate' });
+  }
+});
+
+// ═══ CURRENCY CONVERSION (convert existing order data — FBM or FBA) ═══
+app.post('/api/settings/convert-currency', async (req, res) => {
+  try {
+    const email = (req.headers['x-user-email'] || '').toLowerCase();
+    if (email !== 'parttthh@gmail.com') {
+      return res.status(403).json({ error: 'Only the primary owner can convert currencies' });
+    }
+
+    const { type, fromCurrency, toCurrency, section } = req.body; // section: 'fbm' or 'fba'
+    if (!type || !fromCurrency || !toCurrency || !section) {
+      return res.status(400).json({ error: 'Missing required fields: type, fromCurrency, toCurrency, section' });
+    }
+    if (!['fbm', 'fba'].includes(section)) {
+      return res.status(400).json({ error: 'Section must be fbm or fba' });
+    }
+    if (fromCurrency === toCurrency) {
+      return res.status(400).json({ error: 'From and To currencies are the same' });
+    }
+
+    // Helper: fetch rates for a set of dates
+    async function fetchRatesForDates(dateSet) {
+      const ratesByDate = {};
+      const dates = [...dateSet].sort();
+      for (const date of dates) {
+        const rate = await fetchHistoricalRate(fromCurrency, toCurrency, date);
+        if (rate) {
+          ratesByDate[date] = rate;
+        } else {
+          const fallback = await fetchLiveRate(fromCurrency, toCurrency);
+          if (fallback) ratesByDate[date] = fallback;
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+      return ratesByDate;
+    }
+
+    const todayRate = await fetchLiveRate(fromCurrency, toCurrency);
+    let converted = 0;
+    let total = 0;
+    let ratesUsed = 0;
+
+    if (section === 'fbm') {
+      // ── FBM: convert orders table ──
+      const ordersResult = await pool.query(
+        'SELECT id, order_date, total_sell_price, total_buy_price_inc_vat, total_buy_price_exc_vat, shipping_cost_gbp, unit_buy_price_inc_vat, delivery_fee_per_line, expected_profit, cost_usd, locked_gbp_usd_rate FROM orders'
+      );
+      const orders = ordersResult.rows;
+      total = orders.length;
+      if (total === 0) {
+        const settingKey = `fbm_${type}_currency`;
+        await pool.query(
+          `INSERT INTO settings (key, value, updated_at, updated_by) VALUES ($1, $2, NOW(), $3) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW(), updated_by = $3`,
+          [settingKey, JSON.stringify(toCurrency), email]
+        );
+        return res.json({ ok: true, converted: 0, total: 0, message: 'No FBM orders to convert' });
+      }
+
+      const dateSet = new Set();
+      for (const o of orders) {
+        const d = o.order_date ? new Date(o.order_date).toISOString().split('T')[0] : null;
+        if (d) dateSet.add(d);
+      }
+      console.log(`💱 FBM ${type} conversion: ${fromCurrency}→${toCurrency} for ${total} orders across ${dateSet.size} dates`);
+      const ratesByDate = await fetchRatesForDates(dateSet);
+      ratesUsed = Object.keys(ratesByDate).length;
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const o of orders) {
+          const dateStr = o.order_date ? new Date(o.order_date).toISOString().split('T')[0] : null;
+          const rate = (dateStr && ratesByDate[dateStr]) || todayRate;
+          if (!rate) continue;
+
+          if (type === 'buy') {
+            const updates = {};
+            if (o.unit_buy_price_inc_vat != null) updates.unit_buy_price_inc_vat = Math.round(Number(o.unit_buy_price_inc_vat) * rate * 100) / 100;
+            if (o.delivery_fee_per_line != null) updates.delivery_fee_per_line = Math.round(Number(o.delivery_fee_per_line) * rate * 100) / 100;
+            if (o.total_buy_price_inc_vat != null) updates.total_buy_price_inc_vat = Math.round(Number(o.total_buy_price_inc_vat) * rate * 100) / 100;
+            if (o.total_buy_price_exc_vat != null) updates.total_buy_price_exc_vat = Math.round(Number(o.total_buy_price_exc_vat) * rate * 100) / 100;
+            if (o.shipping_cost_gbp != null) updates.shipping_cost_gbp = Math.round(Number(o.shipping_cost_gbp) * rate * 100) / 100;
+            const setClauses = Object.entries(updates).map(([k], i) => `"${k}" = $${i + 2}`);
+            if (setClauses.length > 0) { await client.query(`UPDATE orders SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1`, [o.id, ...Object.values(updates)]); converted++; }
+          } else {
+            const updates = {};
+            if (o.total_sell_price != null) updates.total_sell_price = Math.round(Number(o.total_sell_price) * rate * 100) / 100;
+            if (o.expected_profit != null) updates.expected_profit = Math.round(Number(o.expected_profit) * rate * 100) / 100;
+            if (o.cost_usd != null) updates.cost_usd = Math.round(Number(o.cost_usd) * rate * 100) / 100;
+            const setClauses = Object.entries(updates).map(([k], i) => `"${k}" = $${i + 2}`);
+            if (setClauses.length > 0) { await client.query(`UPDATE orders SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1`, [o.id, ...Object.values(updates)]); converted++; }
+          }
+        }
+        await client.query('COMMIT');
+      } catch (txErr) { await client.query('ROLLBACK'); throw txErr; } finally { client.release(); }
+
+    } else {
+      // ── FBA: convert fba_products + fba_approvals ──
+      const prodResult = await pool.query(
+        'SELECT id, created_at, buy_price_inc_vat, buy_price_ex_vat, freight_cost, freight_price_per_kg, buy_price_ex_vat_usd, buy_box_price, landed_cost_usd, fba_fee, referral_fee, profit_per_unit, tariff_per_unit, column1_fixed_usd, est_profit_per_month, total_profit_per_month, total_sales_per_month, est_investment, ninety_day_lowest_price FROM fba_products'
+      );
+      const apprResult = await pool.query(
+        'SELECT id, created_at, buy_price_ex_vat, buy_box_price, profit_per_unit, total_buy_price FROM fba_approvals'
+      );
+      const products = prodResult.rows;
+      const approvals = apprResult.rows;
+      total = products.length + approvals.length;
+      if (total === 0) {
+        const settingKey = `fba_${type}_currency`;
+        await pool.query(
+          `INSERT INTO settings (key, value, updated_at, updated_by) VALUES ($1, $2, NOW(), $3) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW(), updated_by = $3`,
+          [settingKey, JSON.stringify(toCurrency), email]
+        );
+        return res.json({ ok: true, converted: 0, total: 0, message: 'No FBA data to convert' });
+      }
+
+      // FBA products don't always have order_date; use created_at as proxy
+      const dateSet = new Set();
+      for (const p of products) {
+        const d = p.created_at ? new Date(p.created_at).toISOString().split('T')[0] : null;
+        if (d) dateSet.add(d);
+      }
+      for (const a of approvals) {
+        const d = a.created_at ? new Date(a.created_at).toISOString().split('T')[0] : null;
+        if (d) dateSet.add(d);
+      }
+      console.log(`💱 FBA ${type} conversion: ${fromCurrency}→${toCurrency} for ${products.length} products + ${approvals.length} approvals across ${dateSet.size} dates`);
+      const ratesByDate = await fetchRatesForDates(dateSet);
+      ratesUsed = Object.keys(ratesByDate).length;
+
+      // FBA buy-side fields: buy_price_inc_vat, buy_price_ex_vat, freight_cost, freight_price_per_kg
+      // FBA sell-side fields: buy_price_ex_vat_usd, buy_box_price, landed_cost_usd, fba_fee, referral_fee, profit_per_unit, tariff_per_unit, column1_fixed_usd, est_profit_per_month, total_profit_per_month, total_sales_per_month, est_investment, ninety_day_lowest_price
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        for (const p of products) {
+          const dateStr = p.created_at ? new Date(p.created_at).toISOString().split('T')[0] : null;
+          const rate = (dateStr && ratesByDate[dateStr]) || todayRate;
+          if (!rate) continue;
+          const updates = {};
+
+          if (type === 'buy') {
+            if (p.buy_price_inc_vat != null) updates.buy_price_inc_vat = Math.round(Number(p.buy_price_inc_vat) * rate * 100) / 100;
+            if (p.buy_price_ex_vat != null) updates.buy_price_ex_vat = Math.round(Number(p.buy_price_ex_vat) * rate * 100) / 100;
+            if (p.freight_cost != null) updates.freight_cost = Math.round(Number(p.freight_cost) * rate * 100) / 100;
+            if (p.freight_price_per_kg != null) updates.freight_price_per_kg = Math.round(Number(p.freight_price_per_kg) * rate * 100) / 100;
+          } else {
+            if (p.buy_price_ex_vat_usd != null) updates.buy_price_ex_vat_usd = Math.round(Number(p.buy_price_ex_vat_usd) * rate * 100) / 100;
+            if (p.buy_box_price != null) updates.buy_box_price = Math.round(Number(p.buy_box_price) * rate * 100) / 100;
+            if (p.landed_cost_usd != null) updates.landed_cost_usd = Math.round(Number(p.landed_cost_usd) * rate * 100) / 100;
+            if (p.fba_fee != null) updates.fba_fee = Math.round(Number(p.fba_fee) * rate * 100) / 100;
+            if (p.referral_fee != null) updates.referral_fee = Math.round(Number(p.referral_fee) * rate * 100) / 100;
+            if (p.profit_per_unit != null) updates.profit_per_unit = Math.round(Number(p.profit_per_unit) * rate * 100) / 100;
+            if (p.tariff_per_unit != null) updates.tariff_per_unit = Math.round(Number(p.tariff_per_unit) * rate * 100) / 100;
+            if (p.column1_fixed_usd != null) updates.column1_fixed_usd = Math.round(Number(p.column1_fixed_usd) * rate * 100) / 100;
+            if (p.est_profit_per_month != null) updates.est_profit_per_month = Math.round(Number(p.est_profit_per_month) * rate * 100) / 100;
+            if (p.total_profit_per_month != null) updates.total_profit_per_month = Math.round(Number(p.total_profit_per_month) * rate * 100) / 100;
+            if (p.total_sales_per_month != null) updates.total_sales_per_month = Math.round(Number(p.total_sales_per_month) * rate * 100) / 100;
+            if (p.est_investment != null) updates.est_investment = Math.round(Number(p.est_investment) * rate * 100) / 100;
+            if (p.ninety_day_lowest_price != null) updates.ninety_day_lowest_price = Math.round(Number(p.ninety_day_lowest_price) * rate * 100) / 100;
+          }
+
+          const setClauses = Object.entries(updates).map(([k], i) => `"${k}" = $${i + 2}`);
+          if (setClauses.length > 0) { await client.query(`UPDATE fba_products SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1`, [p.id, ...Object.values(updates)]); converted++; }
+        }
+
+        // Convert fba_approvals
+        for (const a of approvals) {
+          const dateStr = a.created_at ? new Date(a.created_at).toISOString().split('T')[0] : null;
+          const rate = (dateStr && ratesByDate[dateStr]) || todayRate;
+          if (!rate) continue;
+          const updates = {};
+
+          if (type === 'buy') {
+            if (a.buy_price_ex_vat != null) updates.buy_price_ex_vat = Math.round(Number(a.buy_price_ex_vat) * rate * 100) / 100;
+            if (a.total_buy_price != null) updates.total_buy_price = Math.round(Number(a.total_buy_price) * rate * 100) / 100;
+          } else {
+            if (a.buy_box_price != null) updates.buy_box_price = Math.round(Number(a.buy_box_price) * rate * 100) / 100;
+            if (a.profit_per_unit != null) updates.profit_per_unit = Math.round(Number(a.profit_per_unit) * rate * 100) / 100;
+          }
+
+          const setClauses = Object.entries(updates).map(([k], i) => `"${k}" = $${i + 2}`);
+          if (setClauses.length > 0) { await client.query(`UPDATE fba_approvals SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1`, [a.id, ...Object.values(updates)]); converted++; }
+        }
+
+        await client.query('COMMIT');
+      } catch (txErr) { await client.query('ROLLBACK'); throw txErr; } finally { client.release(); }
+    }
+
+    // Save the new currency setting with section prefix
+    const settingKey = `${section}_${type}_currency`;
+    await pool.query(
+      `INSERT INTO settings (key, value, updated_at, updated_by) VALUES ($1, $2, NOW(), $3)
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW(), updated_by = $3`,
+      [settingKey, JSON.stringify(toCurrency), email]
+    );
+
+    console.log(`✅ ${section.toUpperCase()} currency conversion: ${converted}/${total} rows converted ${fromCurrency}→${toCurrency}`);
+    res.json({ ok: true, converted, total, ratesUsed, todayRate, section });
+  } catch (error) {
+    console.error('Currency conversion error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

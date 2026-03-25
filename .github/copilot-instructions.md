@@ -4,5 +4,4 @@
 - React frontend setup completed
 - Email authentication implemented
 - Admin approval system built
-- Google Sheets integration configured
 - Ready for Render deployment

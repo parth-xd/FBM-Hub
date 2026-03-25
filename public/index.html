@@ -202,7 +202,7 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   .hide-mobile { display: none !important; }
   .modal-box > div:has(.settings-sidebar) { flex-direction: column !important; height: auto !important; }
   .settings-sidebar { width: 100% !important; height: 48px !important; padding: 0 !important; border-right: none !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; display: flex !important; flex-direction: row !important; justify-content: space-around !important; align-items: center !important; overflow: visible !important; flex-wrap: nowrap !important; }
-  .settings-sidebar button { flex: 1 1 33% !important; padding: 12px 4px !important; font-size: 11px !important; font-weight: 600 !important; border: none !important; border-radius: 0 !important; border-bottom: 3px solid transparent !important; background: transparent !important; color: #86868b !important; margin: 0 !important; white-space: nowrap !important; text-overflow: ellipsis !important; overflow: hidden !important; height: 48px !important; display: flex !important; align-items: center !important; justify-content: center !important; }
+  .settings-sidebar button { flex: 1 1 25% !important; padding: 12px 4px !important; font-size: 11px !important; font-weight: 600 !important; border: none !important; border-radius: 0 !important; border-bottom: 3px solid transparent !important; background: transparent !important; color: #86868b !important; margin: 0 !important; white-space: nowrap !important; text-overflow: ellipsis !important; overflow: hidden !important; height: 48px !important; display: flex !important; align-items: center !important; justify-content: center !important; }
   .settings-sidebar button:hover { background: rgba(0,0,0,0.05) !important; }
   .settings-sidebar button span { display: none !important; }
   .modal-box > div:has(.settings-sidebar) > div:last-child { width: 100% !important; max-height: calc(85vh - 48px) !important; padding: 12px 10px !important; overflow-y: auto !important; }
@@ -622,8 +622,31 @@ const API = {
   // Settings
   getSettings: () => `${API.base()}/api/settings`,
   updateSetting: (key) => `${API.base()}/api/settings/${encodeURIComponent(key)}`,
+  convertCurrency: () => `${API.base()}/api/settings/convert-currency`,
   updateUserRole: (email) => `${API.base()}/api/users/${encodeURIComponent(email)}/role`,
 };
+
+// ═══ CURRENCY CONFIG ═══
+const CURRENCY_OPTIONS = [
+  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+  { code: 'CAD', symbol: 'CA$', name: 'Canadian Dollar' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' },
+  { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+];
+function getCurrencySymbol(code) { return (CURRENCY_OPTIONS.find(c => c.code === code) || {}).symbol || code + ' '; }
+
+// Global mutable currency state — loaded from DB settings on startup
+window.APP_CURRENCIES = { fbm: { buy: 'GBP', sell: 'USD' }, fba: { buy: 'GBP', sell: 'USD' } };
+function buySymbol() { return getCurrencySymbol(window.APP_CURRENCIES.fbm.buy); }
+function sellSymbol() { return getCurrencySymbol(window.APP_CURRENCIES.fbm.sell); }
+function fbaBuySymbol() { return getCurrencySymbol(window.APP_CURRENCIES.fba.buy); }
+function fbaSellSymbol() { return getCurrencySymbol(window.APP_CURRENCIES.fba.sell); }
 
 /* ═══ CENTRALIZED SCHEMA - Single Source of Truth for All Columns ═══ */
 // Global schema object - fetched once on app load and used everywhere
@@ -1912,7 +1935,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             <div style={{fontSize:14,fontWeight:600,color:'#1d1d1f',marginBottom:12}}>ShipStation Entry</div>
             <div className="grid3" style={{gap:10}}>
               {[
-                ['Buy Price Excl. VAT', liveCalc?`£${liveCalc.totalBuyExcVAT.toFixed(2)}`:order.totalBuyPriceExcVAT!=null?`£${Number(order.totalBuyPriceExcVAT).toFixed(2)}`:'—','#1d1d1f'],
+                ['Buy Price Excl. VAT', liveCalc?`${buySymbol()}${liveCalc.totalBuyExcVAT.toFixed(2)}`:order.totalBuyPriceExcVAT!=null?`${buySymbol()}${Number(order.totalBuyPriceExcVAT).toFixed(2)}`:'—','#1d1d1f'],
                 ['B-Qty', editBQty||(order.bQty??'—'),'#1d1d1f'],
                 ['HTS Code', order.htsCode||'—','#86868b'],
               ].map(([k,v,c])=>(
@@ -1931,7 +1954,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
               <div style={{fontSize:15,fontWeight:600,color:'#1d1d1f',letterSpacing:'-0.01em'}}>Profitability</div>
               {displayProfit!=null&&<div style={{display:'flex',gap:12,alignItems:'center'}}>
-                <span style={{fontSize:28,fontWeight:700,fontFamily:'"SF Pro Display","Inter",system-ui',color:displayProfitable?'#34c759':'#ff3b30',letterSpacing:'-0.03em'}}>${displayProfit>=0?'+':''}{displayProfit.toFixed(2)}</span>
+                <span style={{fontSize:28,fontWeight:700,fontFamily:'"SF Pro Display","Inter",system-ui',color:displayProfitable?'#34c759':'#ff3b30',letterSpacing:'-0.03em'}}>{sellSymbol()}{displayProfit>=0?'+':''}{displayProfit.toFixed(2)}</span>
                 {displayMargin!=null&&<span style={{fontSize:13,color:'#86868b',fontWeight:500}}>{displayMargin.toFixed(1)}%</span>}
               </div>}
             </div>
@@ -1980,13 +2003,13 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             {/* Auto-calculated results */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
               {[
-                ['Sell Price', order.totalSellPrice!=null?`$${Number(order.totalSellPrice).toFixed(2)}`:'—', '#34c759'],
-                ['Buy inc. VAT', liveCalc?`£${liveCalc.totalBuyIncVAT.toFixed(2)}`:order.totalBuyPriceIncVAT!=null?`£${Number(order.totalBuyPriceIncVAT).toFixed(2)}`:'—', '#1d1d1f'],
-                ['Buy exc. VAT', liveCalc?`£${liveCalc.totalBuyExcVAT.toFixed(2)}`:order.totalBuyPriceExcVAT!=null?`£${Number(order.totalBuyPriceExcVAT).toFixed(2)}`:'—', '#ff9f0a'],
-                ['Shipping', liveCalc&&liveCalc.shippingGBP?`£${liveCalc.shippingGBP.toFixed(2)}`:order.shippingCostGBP!=null?`£${Number(order.shippingCostGBP).toFixed(2)}`:'—', '#86868b'],
-                ['GBP/USD', (order.labelPrinted&&order.lockedGbpUsdRate?`${Number(order.lockedGbpUsdRate).toFixed(4)} 🔒`:`${parseFloat(gbpUsdRate).toFixed(4)}`), order.labelPrinted&&order.lockedGbpUsdRate?'#86868b':'#0071e3'],
+                ['Sell Price', order.totalSellPrice!=null?`${sellSymbol()}${Number(order.totalSellPrice).toFixed(2)}`:'—', '#34c759'],
+                ['Buy inc. VAT', liveCalc?`${buySymbol()}${liveCalc.totalBuyIncVAT.toFixed(2)}`:order.totalBuyPriceIncVAT!=null?`${buySymbol()}${Number(order.totalBuyPriceIncVAT).toFixed(2)}`:'—', '#1d1d1f'],
+                ['Buy exc. VAT', liveCalc?`${buySymbol()}${liveCalc.totalBuyExcVAT.toFixed(2)}`:order.totalBuyPriceExcVAT!=null?`${buySymbol()}${Number(order.totalBuyPriceExcVAT).toFixed(2)}`:'—', '#ff9f0a'],
+                ['Shipping', liveCalc&&liveCalc.shippingGBP?`${buySymbol()}${liveCalc.shippingGBP.toFixed(2)}`:order.shippingCostGBP!=null?`${buySymbol()}${Number(order.shippingCostGBP).toFixed(2)}`:'—', '#86868b'],
+                [`${window.APP_CURRENCIES.fbm.buy}/${window.APP_CURRENCIES.fbm.sell}`, (order.labelPrinted&&order.lockedGbpUsdRate?`${Number(order.lockedGbpUsdRate).toFixed(4)} 🔒`:`${parseFloat(gbpUsdRate).toFixed(4)}`), order.labelPrinted&&order.lockedGbpUsdRate?'#86868b':'#0071e3'],
                 ['VAT', order.vatStatus||(refData?refData.vat_status:null)||'—', (order.vatStatus||(refData?refData.vat_status:null))==='YES'?'#ff9f0a':'#86868b'],
-                ['Profit', displayProfit!=null?`$${displayProfit.toFixed(2)}`:'—', displayProfitable!=null?(displayProfitable?'#34c759':'#ff3b30'):'#86868b'],
+                ['Profit', displayProfit!=null?`${sellSymbol()}${displayProfit.toFixed(2)}`:'—', displayProfitable!=null?(displayProfitable?'#34c759':'#ff3b30'):'#86868b'],
                 ['Margin', displayMargin!=null?`${displayMargin.toFixed(1)}%`:'—', displayMargin!=null?(displayMargin>=0?'#34c759':'#ff3b30'):'#86868b'],
               ].map(([k,v,c])=><div key={k} style={{background:'rgba(255,255,255,0.7)',borderRadius:12,padding:'10px 12px'}}>
                 <div style={{fontSize:11,color:'#86868b',fontWeight:500,marginBottom:4}}>{k}</div>
@@ -2007,7 +2030,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
             {/* Reference data hint */}
             {refData&&<div style={{marginTop:12,padding:'10px 14px',background:'rgba(255,255,255,0.7)',borderRadius:10,display:'flex',gap:16,alignItems:'center',flexWrap:'wrap'}}>
               <span style={{fontSize:11,color:'#0071e3',fontWeight:600}}>Reference Data</span>
-              {refData.buy_price_inc_vat&&<span style={{fontSize:12,color:'#86868b'}}>Price: £{refData.buy_price_inc_vat}</span>}
+              {refData.buy_price_inc_vat&&<span style={{fontSize:12,color:'#86868b'}}>Price: {buySymbol()}{refData.buy_price_inc_vat}</span>}
               {refData.vat_status&&<span style={{fontSize:12,color:refData.vat_status==='YES'?'#ff9f0a':'#86868b'}}>VAT: {refData.vat_status}</span>}
               {refData.vetted_supplier&&<span style={{fontSize:12,color:'#86868b',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>Supplier: {refData.vetted_supplier.includes('http')?(()=>{try{return new URL(refData.vetted_supplier).hostname}catch{return refData.vetted_supplier}})():refData.vetted_supplier}</span>}
             </div>}
@@ -2144,7 +2167,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                   Product: {order.productName}<br/>
                   Supplied Qty: {order.sQty||'—'} · Received: {order.qtyReceived??'—'} · Gap: <strong>{discrepancy}</strong><br/>
                   VAT Status: <strong style={{color:order.vatStatus==='YES'?'#34c759':'#ff9f0a'}}>{order.vatStatus||'Unknown'}</strong><br/>
-                  {displayProfit!=null&&<>Profit: <strong style={{color:displayProfit>=0?'#34c759':'#ff3b30'}}>${displayProfit.toFixed(2)}</strong> · Margin: {displayMargin!=null?`${displayMargin.toFixed(1)}%`:'—'} · {displayProfitable?'✅ Profitable':'❌ Not Profitable'}</>}
+                  {displayProfit!=null&&<>Profit: <strong style={{color:displayProfit>=0?'#34c759':'#ff3b30'}}>{sellSymbol()}{displayProfit.toFixed(2)}</strong> · Margin: {displayMargin!=null?`${displayMargin.toFixed(1)}%`:'—'} · {displayProfitable?'✅ Profitable':'❌ Not Profitable'}</>}
                 </div>
               </div>
 
@@ -2254,7 +2277,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                     
                     <div style={{fontSize:11,color:'#86efac',marginBottom:12,lineHeight:1.5}}>
                       Label ID: <span style={{fontFamily:'monospace',fontSize:10}}>{labelData.labelId || 'N/A'}</span><br/>
-                      Shipping Cost: £{(labelData.shipmentCost || 0).toFixed(2)}
+                      Shipping Cost: {buySymbol()}{(labelData.shipmentCost || 0).toFixed(2)}
                     </div>
                     
                     {labelData.labelUrl && (
@@ -2287,7 +2310,7 @@ function OrderModal({order,role,onClose,onUpdate,syncCell,onCreateMultiPO,setOrd
                     <div style={{fontSize:11,color:'#0071e3',lineHeight:1.6}}>
                       <strong>Order Details:</strong><br/>
                       Order ID: <span style={{fontFamily:'monospace'}}>{order.orderId?.slice(-14)}</span><br/>
-                      Buy Price (ex VAT): £{(order.totalBuyPriceExcVAT||0).toFixed(2)}<br/>
+                      Buy Price (ex VAT): {buySymbol()}{(order.totalBuyPriceExcVAT||0).toFixed(2)}<br/>
                       Item will be shipped via Royal Mail
                     </div>
                   </div>
@@ -2493,7 +2516,7 @@ function RevenueBreakdownModal({orders, onClose}) {
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
             <div>
               <div style={{fontSize:19, fontWeight:700, color:'#1d1d1f', letterSpacing:'-0.02em'}}>Revenue Breakdown</div>
-              <div style={{fontSize:13, color:'#86868b', marginTop:4}}>Total: <span style={{color:'#34c759', fontWeight:600}}>${analysis.totalRev.toFixed(0)}</span> across {orders.length} orders</div>
+              <div style={{fontSize:13, color:'#86868b', marginTop:4}}>Total: <span style={{color:'#34c759', fontWeight:600}}>{sellSymbol()}{analysis.totalRev.toFixed(0)}</span> across {orders.length} orders</div>
             </div>
             <button onClick={onClose} style={{width:32, height:32, borderRadius:16, border:'none', background:'rgba(0,0,0,0.06)', cursor:'pointer', fontSize:16, color:'#86868b', display:'flex', alignItems:'center', justifyContent:'center'}}>×</button>
           </div>
@@ -2539,10 +2562,10 @@ function RevenueBreakdownModal({orders, onClose}) {
               return (
                 <div style={{display:'flex', gap:10, marginBottom:20, flexWrap:'wrap'}}>
                   {[
-                    {l:`Avg ${view} revenue`, v:`$${avgRev.toFixed(0)}`, c:'#0071e3'},
+                    {l:`Avg ${view} revenue`, v:`${sellSymbol()}${avgRev.toFixed(0)}`, c:'#0071e3'},
                     {l:'Total periods', v:currentData.length, c:'#86868b'},
                     {l:'Total orders', v:totalOrders, c:'#86868b'},
-                    {l:'Total profit', v:`$${totalProfit.toFixed(0)}`, c:totalProfit>=0?'#34c759':'#ff3b30'},
+                    {l:'Total profit', v:`${sellSymbol()}${totalProfit.toFixed(0)}`, c:totalProfit>=0?'#34c759':'#ff3b30'},
                   ].map(s => (
                     <div key={s.l} style={{flex:'1 1 120px', background:'rgba(0,0,0,0.02)', borderRadius:12, padding:'10px 14px'}}>
                       <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>{s.l}</div>
@@ -2564,8 +2587,8 @@ function RevenueBreakdownModal({orders, onClose}) {
                     <div style={{height:'100%', width:`${(data.rev / maxRev) * 100}%`, background:'linear-gradient(90deg, #34c759, #30d158)', borderRadius:6, transition:'width 0.3s'}}/>
                     <div style={{position:'absolute', top:0, left:0, height:'100%', width:`${(data.profit / maxRev) * 100}%`, background:'rgba(0,113,227,0.25)', borderRadius:6}}/>
                   </div>
-                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:'#34c759', fontWeight:600}}>${data.rev.toFixed(0)}</div>
-                  <div className="hide-mobile" style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:10, color:data.profit>=0?'#0071e3':'#ff3b30'}}>${data.profit.toFixed(0)}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:'#34c759', fontWeight:600}}>{sellSymbol()}{data.rev.toFixed(0)}</div>
+                  <div className="hide-mobile" style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:10, color:data.profit>=0?'#0071e3':'#ff3b30'}}>{sellSymbol()}{data.profit.toFixed(0)}</div>
                   <div className="hide-mobile" style={{flexShrink:0, width:30, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:10, color:'#86868b'}}>{data.count}</div>
                 </div>
               ))}
@@ -2603,12 +2626,12 @@ function RevenueBreakdownModal({orders, onClose}) {
                   </div>
                   <div style={{flex:'1 1 160px', background:'rgba(0,113,227,0.06)', borderRadius:14, padding:'14px 16px'}}>
                     <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>Last Month Revenue</div>
-                    <div style={{fontSize:'clamp(20px, 2.5vw, 28px)', fontWeight:700, color:'#0071e3', fontFamily:'IBM Plex Mono'}}>${p.lastRev.toFixed(0)}</div>
+                    <div style={{fontSize:'clamp(20px, 2.5vw, 28px)', fontWeight:700, color:'#0071e3', fontFamily:'IBM Plex Mono'}}>{sellSymbol()}{p.lastRev.toFixed(0)}</div>
                     <div style={{fontSize:11, color:'#86868b', marginTop:4}}>{formatDate(p.lastMonth)}</div>
                   </div>
                   {p.projected[2] && <div style={{flex:'1 1 160px', background:'rgba(255,159,10,0.08)', borderRadius:14, padding:'14px 16px'}}>
                     <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>3-Month Projected</div>
-                    <div style={{fontSize:'clamp(20px, 2.5vw, 28px)', fontWeight:700, color:'#ff9f0a', fontFamily:'IBM Plex Mono'}}>${p.projected[2].rev.toFixed(0)}</div>
+                    <div style={{fontSize:'clamp(20px, 2.5vw, 28px)', fontWeight:700, color:'#ff9f0a', fontFamily:'IBM Plex Mono'}}>{sellSymbol()}{p.projected[2].rev.toFixed(0)}</div>
                     <div style={{fontSize:11, color:'#86868b', marginTop:4}}>by {formatDate(p.projected[2].month)}</div>
                   </div>}
                 </div>
@@ -2629,7 +2652,7 @@ function RevenueBreakdownModal({orders, onClose}) {
                         }}/>
                       </div>
                       <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:m.type==='projected'?'#ff9f0a':'#34c759', fontWeight:600}}>
-                        ${m.rev.toFixed(0)}
+                        {sellSymbol()}{m.rev.toFixed(0)}
                       </div>
                     </div>
                   ))}
@@ -2649,8 +2672,8 @@ function RevenueBreakdownModal({orders, onClose}) {
                     {p.projected.map((m, i) => (
                       <tr key={m.month} style={{borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
                         <td style={{padding:'8px 12px', fontSize:13, fontWeight:600, color:'#ff9f0a'}}>{formatDate(m.month)}</td>
-                        <td style={{padding:'8px 12px', fontFamily:'IBM Plex Mono', fontSize:13, color:'#34c759', fontWeight:600}}>${m.rev.toFixed(0)}</td>
-                        <td style={{padding:'8px 12px', fontFamily:'IBM Plex Mono', fontSize:13, color:m.profit>=0?'#0071e3':'#ff3b30'}}>${m.profit.toFixed(0)}</td>
+                        <td style={{padding:'8px 12px', fontFamily:'IBM Plex Mono', fontSize:13, color:'#34c759', fontWeight:600}}>{sellSymbol()}{m.rev.toFixed(0)}</td>
+                        <td style={{padding:'8px 12px', fontFamily:'IBM Plex Mono', fontSize:13, color:m.profit>=0?'#0071e3':'#ff3b30'}}>{sellSymbol()}{m.profit.toFixed(0)}</td>
                         <td style={{padding:'8px 12px', fontFamily:'IBM Plex Mono', fontSize:12, color:isPositive?'#34c759':'#ff3b30'}}>{isPositive?'+':''}{growthPct}%</td>
                       </tr>
                     ))}
@@ -2701,8 +2724,8 @@ function RevenueBreakdownModal({orders, onClose}) {
                     </div>
                     <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:12, fontWeight:700, color:'#0071e3'}}>{p.count}×</div>
                     <div style={{flexShrink:0, textAlign:'right'}}>
-                      <div style={{fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:600, color:'#34c759'}}>${p.rev.toFixed(0)}</div>
-                      <div style={{fontFamily:'IBM Plex Mono', fontSize:9, color:p.profit>=0?'#0071e3':'#ff3b30'}}>P: ${p.profit.toFixed(0)}</div>
+                      <div style={{fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:600, color:'#34c759'}}>{sellSymbol()}{p.rev.toFixed(0)}</div>
+                      <div style={{fontFamily:'IBM Plex Mono', fontSize:9, color:p.profit>=0?'#0071e3':'#ff3b30'}}>P: {sellSymbol()}{p.profit.toFixed(0)}</div>
                     </div>
                   </div>
                   );
@@ -2811,7 +2834,7 @@ function CostAnalysisModal({orders, onClose}) {
           <div style={{fontSize:9, color:'#86868b', fontFamily:'IBM Plex Mono', marginTop:1}}>…{(o.orderId||'').slice(-14)}</div>
         </div>
         <div style={{flexShrink:0, textAlign:'right'}}>
-          <div style={{fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:'#ff3b30'}}>£{cost.toFixed(0)}</div>
+          <div style={{fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:'#ff3b30'}}>{buySymbol()}{cost.toFixed(0)}</div>
           <div style={{fontSize:9, color:'#86868b'}}>cost</div>
         </div>
         <div style={{flexShrink:0, textAlign:'right'}}>
@@ -2835,7 +2858,7 @@ function CostAnalysisModal({orders, onClose}) {
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
             <div>
               <div style={{fontSize:19, fontWeight:700, color:'#1d1d1f', letterSpacing:'-0.02em'}}>Cost Analysis</div>
-              <div style={{fontSize:13, color:'#86868b', marginTop:4}}>Total: <span style={{color:'#ff3b30', fontWeight:600}}>£{analysis.totalCost.toFixed(0)}</span> across {analysis.withCost.length} orders · Avg: <span style={{fontWeight:600}}>£{analysis.avgCost.toFixed(0)}</span>/order</div>
+              <div style={{fontSize:13, color:'#86868b', marginTop:4}}>Total: <span style={{color:'#ff3b30', fontWeight:600}}>{buySymbol()}{analysis.totalCost.toFixed(0)}</span> across {analysis.withCost.length} orders · Avg: <span style={{fontWeight:600}}>{buySymbol()}{analysis.avgCost.toFixed(0)}</span>/order</div>
             </div>
             <button onClick={onClose} style={{width:32, height:32, borderRadius:16, border:'none', background:'rgba(0,0,0,0.06)', cursor:'pointer', fontSize:16, color:'#86868b', display:'flex', alignItems:'center', justifyContent:'center'}}>×</button>
           </div>
@@ -2864,10 +2887,10 @@ function CostAnalysisModal({orders, onClose}) {
           {/* Summary cards */}
           <div style={{display:'flex', gap:10, marginBottom:20, flexWrap:'wrap'}}>
             {[
-              {l:'Total Buy Cost', v:`£${analysis.totalCost.toFixed(0)}`, c:'#ff3b30'},
-              {l:'Shipping Cost', v:`£${analysis.totalShipping.toFixed(0)}`, c:'#ff9f0a'},
-              {l:'Total Profit', v:`$${analysis.totalProfit.toFixed(0)}`, c:analysis.totalProfit>=0?'#34c759':'#ff3b30'},
-              {l:'Avg Cost/Order', v:`£${analysis.avgCost.toFixed(1)}`, c:'#0071e3'},
+              {l:'Total Buy Cost', v:`${buySymbol()}${analysis.totalCost.toFixed(0)}`, c:'#ff3b30'},
+              {l:'Shipping Cost', v:`${buySymbol()}${analysis.totalShipping.toFixed(0)}`, c:'#ff9f0a'},
+              {l:'Total Profit', v:`${sellSymbol()}${analysis.totalProfit.toFixed(0)}`, c:analysis.totalProfit>=0?'#34c759':'#ff3b30'},
+              {l:'Avg Cost/Order', v:`${buySymbol()}${analysis.avgCost.toFixed(1)}`, c:'#0071e3'},
             ].map(s => (
               <div key={s.l} style={{flex:'1 1 130px', background:'rgba(0,0,0,0.02)', borderRadius:12, padding:'12px 16px'}}>
                 <div style={{fontSize:11, color:'#86868b', marginBottom:4}}>{s.l}</div>
@@ -2912,8 +2935,8 @@ function CostAnalysisModal({orders, onClose}) {
                   <div style={{flex:1, height:22, background:'rgba(0,0,0,0.03)', borderRadius:6, overflow:'hidden', position:'relative', minWidth:30}}>
                     <div style={{height:'100%', width:`${(s.cost / maxSupCost) * 100}%`, background:s.color || '#ff3b30', borderRadius:6, opacity:0.7}}/>
                   </div>
-                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:'#ff3b30'}}>£{s.cost.toFixed(0)}</div>
-                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:s.profit>=0?'#34c759':'#ff3b30'}}>${s.profit.toFixed(0)}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:'#ff3b30'}}>{buySymbol()}{s.cost.toFixed(0)}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:s.profit>=0?'#34c759':'#ff3b30'}}>{sellSymbol()}{s.profit.toFixed(0)}</div>
                   <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:10, color:margin>30?'#34c759':margin>10?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
                   <div className="hide-mobile" style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:'#86868b'}}>{s.count}×</div>
                 </div>
@@ -2933,8 +2956,8 @@ function CostAnalysisModal({orders, onClose}) {
                     <div style={{height:'100%', width:`${(imp.cost / maxImpCost) * 100}%`, background:'#ff3b30', borderRadius:6, opacity:0.6}}/>
                     <div style={{position:'absolute', top:0, left:0, height:'100%', width:`${(imp.profit / maxImpCost) * 100}%`, background:'rgba(52,199,89,0.5)', borderRadius:6}}/>
                   </div>
-                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:'#ff3b30'}}>£{imp.cost.toFixed(0)}</div>
-                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:imp.profit>=0?'#34c759':'#ff3b30'}}>${imp.profit.toFixed(0)}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, fontWeight:700, color:'#ff3b30'}}>{buySymbol()}{imp.cost.toFixed(0)}</div>
+                  <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:imp.profit>=0?'#34c759':'#ff3b30'}}>{sellSymbol()}{imp.profit.toFixed(0)}</div>
                   <div style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:10, color:margin>30?'#34c759':margin>10?'#ff9f0a':'#ff3b30'}}>{margin.toFixed(0)}%</div>
                   <div className="hide-mobile" style={{flexShrink:0, textAlign:'right', fontFamily:'IBM Plex Mono', fontSize:11, color:'#86868b'}}>{imp.count}×</div>
                 </div>
@@ -3077,11 +3100,11 @@ function OwnerDashboard({orders}) {
       {/* Top KPIs */}
       <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:24}}>
         {[
-          {l:'Total Revenue',v:`$${(stats.totalRev||0).toFixed(0)}`,c:'#34c759',sub:'Sell prices (USD)'},
-          {l:'Total Buy Cost',v:`£${(stats.totalCost||0).toFixed(0)}`,c:'#ff3b30',sub:'incl. VAT (GBP)'},
-          {l:'Total Profit',v:`$${(stats.totalProfit||0).toFixed(0)}`,c:(stats.totalProfit||0)>=0?'#34c759':'#ff3b30',sub:'Expected'},
+          {l:'Total Revenue',v:`${sellSymbol()}${(stats.totalRev||0).toFixed(0)}`,c:'#34c759',sub:`Sell prices (${window.APP_CURRENCIES.fbm.sell})`},
+          {l:'Total Buy Cost',v:`${buySymbol()}${(stats.totalCost||0).toFixed(0)}`,c:'#ff3b30',sub:`incl. VAT (${window.APP_CURRENCIES.fbm.buy})`},
+          {l:'Total Profit',v:`${sellSymbol()}${(stats.totalProfit||0).toFixed(0)}`,c:(stats.totalProfit||0)>=0?'#34c759':'#ff3b30',sub:'Expected'},
           {l:'Profit Margin',v:`${(stats.marginPct||0).toFixed(1)}%`,c:(stats.marginPct||0)>20?'#34c759':(stats.marginPct||0)>0?'#ff9f0a':'#ff3b30',sub:'Revenue %'},
-          {l:'Shipping Cost',v:`£${(stats.totalShipCost||0).toFixed(0)}`,c:'#ff9f0a',sub:'GBP total'},
+          {l:'Shipping Cost',v:`${buySymbol()}${(stats.totalShipCost||0).toFixed(0)}`,c:'#ff9f0a',sub:`${window.APP_CURRENCIES.fbm.buy} total`},
           {l:'Shipped',v:stats.shipped||0,c:'#34c759',sub:`of ${stats.totalOrders||0}`},
           {l:'DHL Orders',v:(stats.dhlOrders||[]).length,c:'#ff9f0a',sub:'≥$300 value'},
           {l:'Exceptions',v:(stats.exceptions||[]).length,c:(stats.exceptions||[]).length?'#ff3b30':'#34c759',sub:'Discrepancy'},
@@ -3110,7 +3133,7 @@ function OwnerDashboard({orders}) {
                 <div className="bar-fill" style={{width:`${(data.count/(maxImporterCount||1))*100}%`,background:'#0071e3'}}/>
               </div>
               <div style={{flexShrink:0,fontFamily:'IBM Plex Mono',fontSize:11,color:'#0071e3',textAlign:'right'}}>{data.count||0}</div>
-              <div style={{flexShrink:0,fontFamily:'IBM Plex Mono',fontSize:11,color:(data.profit||0)>=0?'#34c759':'#ff3b30',textAlign:'right'}}>${(data.profit||0).toFixed(0)}</div>
+              <div style={{flexShrink:0,fontFamily:'IBM Plex Mono',fontSize:11,color:(data.profit||0)>=0?'#34c759':'#ff3b30',textAlign:'right'}}>{sellSymbol()}{(data.profit||0).toFixed(0)}</div>
             </div>
           ))}
         </div>
@@ -3146,11 +3169,11 @@ function OwnerDashboard({orders}) {
                 return <tr key={i} style={{borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
                   <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>{r.wFrom}–{r.wTo}kg</td>
                   <td style={{padding:'8px 12px',fontSize:12,color:'#86868b'}}>Int'l Tracked PDDP</td>
-                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#1d1d1f'}}>£{r.priceItem}</td>
-                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>{r.priceKg>0?`£${r.priceKg}`:'-'}</td>
+                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#1d1d1f'}}>{buySymbol()}{r.priceItem}</td>
+                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>{r.priceKg>0?`${buySymbol()}${r.priceKg}`:'-'}</td>
                   <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>{((window.APP_RATES?.calc?.fuelSurcharge||0.065)*100).toFixed(1)}%</td>
-                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>£{r.duty}</td>
-                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#0071e3',fontWeight:600}}>{total?`~£${total}`:'—'}</td>
+                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>{buySymbol()}{r.duty}</td>
+                  <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#0071e3',fontWeight:600}}>{total?`~${buySymbol()}${total}`:'—'}</td>
                 </tr>;
               })}
             </tbody>
@@ -3160,7 +3183,7 @@ function OwnerDashboard({orders}) {
 
       {/* DHL Detail */}
       {(stats.dhlOrders||[]).length>0&&<div className="card" style={{padding:24}}>
-        <div style={{fontSize:15,fontWeight:600,color:'#1d1d1f',marginBottom:14,letterSpacing:'-0.01em'}}>DHL Orders (Sell price ≥ $300)</div>
+        <div style={{fontSize:15,fontWeight:600,color:'#1d1d1f',marginBottom:14,letterSpacing:'-0.01em'}}>DHL Orders (Sell price ≥ {sellSymbol()}300)</div>
         <div style={{overflowX:'auto'}}>
           <table>
             <thead>
@@ -3172,8 +3195,8 @@ function OwnerDashboard({orders}) {
               {(stats.dhlOrders||[]).map(o=><tr key={o.id} style={{borderBottom:'1px solid rgba(0,0,0,0.04)'}}>
                 <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#0071e3'}}>…{(o.orderId||'').slice(-14)}</td>
                 <td style={{padding:'8px 12px',fontSize:12,color:'#86868b',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.productName}</td>
-                <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#34c759',fontWeight:600}}>${Number(o.totalSellPrice||0).toFixed(2)}</td>
-                <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:Number(o.expectedProfit||0)>=0?'#34c759':'#ff3b30'}}>${Number(o.expectedProfit||0).toFixed(2)}</td>
+                <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#34c759',fontWeight:600}}>{sellSymbol()}{Number(o.totalSellPrice||0).toFixed(2)}</td>
+                <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:Number(o.expectedProfit||0)>=0?'#34c759':'#ff3b30'}}>{sellSymbol()}{Number(o.expectedProfit||0).toFixed(2)}</td>
                 <td style={{padding:'8px 12px',fontFamily:'IBM Plex Mono',fontSize:12,color:'#86868b'}}>{o.orderWeight||'—'}kg</td>
                 <td style={{padding:'8px 12px',fontSize:12,color:'#86868b'}}>{o.purchasedBy||'—'}</td>
               </tr>)}
@@ -3408,13 +3431,13 @@ function INSView({orders}) {
                   {label:'Order Date',value:selectedItem.orderDate?new Date(selectedItem.orderDate).toLocaleDateString():'—'},
                   {label:'Sell Qty',value:selectedItem.sQty||'-'},
                   {label:'Buy Qty',value:selectedItem.bQty||'-'},
-                  {label:'Sell Price',value:selectedItem.totalSellPrice?`£${selectedItem.totalSellPrice.toFixed(2)}`:'—'},
-                  {label:'Buy Price (Inc VAT)',value:selectedItem.totalBuyPriceIncVAT?`£${selectedItem.totalBuyPriceIncVAT.toFixed(2)}`:'—'},
-                  {label:'Expected Profit',value:selectedItem.expectedProfit?`£${selectedItem.expectedProfit.toFixed(2)}`:'—'},
+                  {label:'Sell Price',value:selectedItem.totalSellPrice?`${sellSymbol()}${selectedItem.totalSellPrice.toFixed(2)}`:'—'},
+                  {label:'Buy Price (Inc VAT)',value:selectedItem.totalBuyPriceIncVAT?`${buySymbol()}${selectedItem.totalBuyPriceIncVAT.toFixed(2)}`:'—'},
+                  {label:'Expected Profit',value:selectedItem.expectedProfit?`${sellSymbol()}${selectedItem.expectedProfit.toFixed(2)}`:'—'},
                   {label:'Purchased By',value:selectedItem.purchasedBy||'-'},
                   {label:'Checked By',value:selectedItem.checkedBy||'-'},
                   {label:'VAT Status',value:selectedItem.vatStatus||'-'},
-                  {label:'Shipping Cost',value:selectedItem.shippingCostGBP?`£${selectedItem.shippingCostGBP.toFixed(2)}`:'—'},
+                  {label:'Shipping Cost',value:selectedItem.shippingCostGBP?`${buySymbol()}${selectedItem.shippingCostGBP.toFixed(2)}`:'—'},
                   {label:'Order Weight',value:selectedItem.orderWeight?`${selectedItem.orderWeight}kg`:'—'},
                   {label:'Ship By Date',value:selectedItem.shipByDate?new Date(selectedItem.shipByDate).toLocaleDateString():'—'},
                   {label:'Expected Delivery',value:selectedItem.expectedDeliveryDate?new Date(selectedItem.expectedDeliveryDate).toLocaleDateString():'—'},
@@ -3696,12 +3719,20 @@ function RoleRequestsPanel({onDecision}) {
 }
 
 /* ═══ SETTINGS MODAL (Owner Only) ═══ */
-function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
+function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurrencyChanged}) {
   const [section, setSection] = useState('accounts');
   const [rmRates, setRmRates] = useState(() => JSON.parse(JSON.stringify(window.APP_RATES?.rmRates || DEFAULT_RM_RATES)));
   const [calc, setCalc] = useState(() => ({...(window.APP_RATES?.calc || DEFAULT_CALC_CONSTANTS)}));
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  // FBM currencies
+  const [fbmBuyCurrency, setFbmBuyCurrency] = useState(window.APP_CURRENCIES.fbm.buy);
+  const [fbmSellCurrency, setFbmSellCurrency] = useState(window.APP_CURRENCIES.fbm.sell);
+  // FBA currencies
+  const [fbaBuyCurrency, setFbaBuyCurrency] = useState(window.APP_CURRENCIES.fba.buy);
+  const [fbaSellCurrency, setFbaSellCurrency] = useState(window.APP_CURRENCIES.fba.sell);
+  const [convertConfirm, setConvertConfirm] = useState(null); // {section, type, from, to}
+  const [converting, setConverting] = useState(false);
 
   // Load saved settings from DB on mount
   React.useEffect(() => {
@@ -3718,6 +3749,14 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
             setCalc(data.calc_constants.value);
             window.APP_RATES.calc = data.calc_constants.value;
           }
+          // FBM currencies (with backward compat for old buy_currency/sell_currency keys)
+          const fbmBuy = data.fbm_buy_currency?.value || data.buy_currency?.value;
+          const fbmSell = data.fbm_sell_currency?.value || data.sell_currency?.value;
+          if (fbmBuy) { setFbmBuyCurrency(fbmBuy); window.APP_CURRENCIES.fbm.buy = fbmBuy; }
+          if (fbmSell) { setFbmSellCurrency(fbmSell); window.APP_CURRENCIES.fbm.sell = fbmSell; }
+          // FBA currencies
+          if (data.fba_buy_currency?.value) { setFbaBuyCurrency(data.fba_buy_currency.value); window.APP_CURRENCIES.fba.buy = data.fba_buy_currency.value; }
+          if (data.fba_sell_currency?.value) { setFbaSellCurrency(data.fba_sell_currency.value); window.APP_CURRENCIES.fba.sell = data.fba_sell_currency.value; }
         }
       } catch(e) { console.warn('Settings load error:', e); }
     })();
@@ -3751,8 +3790,60 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
     setCalc(prev => ({...prev, [field]: parseFloat(val) || 0}));
   };
 
+  // Currency change: show confirm popup (section = 'fbm' or 'fba')
+  const handleCurrencyChange = (sec, type, newCode) => {
+    const oldCode = sec === 'fbm'
+      ? (type === 'buy' ? fbmBuyCurrency : fbmSellCurrency)
+      : (type === 'buy' ? fbaBuyCurrency : fbaSellCurrency);
+    if (newCode === oldCode) return;
+    setConvertConfirm({ section: sec, type, from: oldCode, to: newCode });
+  };
+
+  // Execute currency change (with or without converting existing data)
+  const executeCurrencyChange = async (convertExisting) => {
+    if (!convertConfirm) return;
+    const { section: sec, type, from, to } = convertConfirm;
+    setConverting(true);
+    try {
+      if (convertExisting) {
+        const res = await fetch(API.convertCurrency(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-user-email': currentUser?.email || '' },
+          body: JSON.stringify({ type, fromCurrency: from, toCurrency: to, section: sec })
+        });
+        const data = await res.json();
+        if (!res.ok) { setToast('Error: ' + (data.error || 'Conversion failed')); setConverting(false); setConvertConfirm(null); return; }
+        setToast(`${sec.toUpperCase()}: Converted ${data.converted} rows from ${from} to ${to}`);
+      } else {
+        const settingKey = `${sec}_${type}_currency`;
+        await fetch(API.updateSetting(settingKey), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'x-user-email': currentUser?.email || '' },
+          body: JSON.stringify({ value: to })
+        });
+        setToast(`${sec.toUpperCase()}: New data will use ${to}`);
+      }
+      // Update local state
+      if (sec === 'fbm') {
+        if (type === 'buy') { setFbmBuyCurrency(to); window.APP_CURRENCIES.fbm.buy = to; }
+        else { setFbmSellCurrency(to); window.APP_CURRENCIES.fbm.sell = to; }
+      } else {
+        if (type === 'buy') { setFbaBuyCurrency(to); window.APP_CURRENCIES.fba.buy = to; }
+        else { setFbaSellCurrency(to); window.APP_CURRENCIES.fba.sell = to; }
+      }
+      if (onCurrencyChanged) onCurrencyChanged();
+      setTimeout(() => setToast(null), 3000);
+    } catch (e) {
+      setToast('Error: ' + e.message);
+      setTimeout(() => setToast(null), 4000);
+    }
+    setConverting(false);
+    setConvertConfirm(null);
+  };
+
   const SECTIONS = [
     {key:'accounts', label:'Manage Accounts', abbr:'Accounts', color:'#0071e3'},
+    {key:'currency', label:'Manage Currency', abbr:'Currency', color:'#5856d6'},
     {key:'rates', label:'Manage Rates', abbr:'Rates', color:'#ff9500'},
     {key:'calculations', label:'Manage Calculations', abbr:'Formulas', color:'#34c759'},
   ];
@@ -3793,6 +3884,135 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
             {/* ── MANAGE ACCOUNTS ── */}
             {section === 'accounts' && <SettingsAccounts accounts={accounts} onSave={onSaveAccounts} currentUser={currentUser}/>}
 
+            {/* ── MANAGE CURRENCY ── */}
+            {section === 'currency' && <>
+              <div style={{fontSize:15, fontWeight:700, color:'#1d1d1f', marginBottom:4, letterSpacing:'-0.01em'}}>Manage Currency</div>
+              <div style={{fontSize:12, color:'#86868b', marginBottom:20}}>Set independent buy/sell currencies for FBM and FBA sections</div>
+
+              {/* ── FBM CURRENCIES ── */}
+              <div style={{marginBottom:28}}>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12}}>
+                  <span style={{background:'#0071e3', color:'#fff', fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:6, letterSpacing:'0.04em'}}>FBM</span>
+                  <span style={{fontSize:13, fontWeight:600, color:'#1d1d1f'}}>Fulfilment by Merchant</span>
+                </div>
+                <div style={{display:'flex', gap:14, flexWrap:'wrap'}}>
+                  <div style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
+                    <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', marginBottom:3}}>Buy Currency</div>
+                    <div style={{fontSize:10, color:'#86868b', marginBottom:12}}>Unit buy price, delivery fees, shipping, VAT</div>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <div style={{fontSize:28, fontWeight:700, color:'#5856d6', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbmBuyCurrency)}</div>
+                      <select value={fbmBuyCurrency} onChange={e => handleCurrencyChange('fbm','buy',e.target.value)}
+                        style={{flex:1, padding:'9px 12px', fontSize:13, fontWeight:600, border:'1px solid rgba(0,0,0,0.1)', borderRadius:10, background:'#fff', cursor:'pointer', color:'#1d1d1f'}}>
+                        {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
+                    <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', marginBottom:3}}>Sell Currency</div>
+                    <div style={{fontSize:10, color:'#86868b', marginBottom:12}}>Sell price, revenue, profit calculations</div>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <div style={{fontSize:28, fontWeight:700, color:'#34c759', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbmSellCurrency)}</div>
+                      <select value={fbmSellCurrency} onChange={e => handleCurrencyChange('fbm','sell',e.target.value)}
+                        style={{flex:1, padding:'9px 12px', fontSize:13, fontWeight:600, border:'1px solid rgba(0,0,0,0.1)', borderRadius:10, background:'#fff', cursor:'pointer', color:'#1d1d1f'}}>
+                        {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── FBA CURRENCIES ── */}
+              <div style={{marginBottom:24}}>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:12}}>
+                  <span style={{background:'#ff9500', color:'#fff', fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:6, letterSpacing:'0.04em'}}>FBA</span>
+                  <span style={{fontSize:13, fontWeight:600, color:'#1d1d1f'}}>Fulfilment by Amazon</span>
+                </div>
+                <div style={{display:'flex', gap:14, flexWrap:'wrap'}}>
+                  <div style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
+                    <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', marginBottom:3}}>Buy Currency</div>
+                    <div style={{fontSize:10, color:'#86868b', marginBottom:12}}>Supplier cost, freight, buy price ex/inc VAT</div>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <div style={{fontSize:28, fontWeight:700, color:'#5856d6', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbaBuyCurrency)}</div>
+                      <select value={fbaBuyCurrency} onChange={e => handleCurrencyChange('fba','buy',e.target.value)}
+                        style={{flex:1, padding:'9px 12px', fontSize:13, fontWeight:600, border:'1px solid rgba(0,0,0,0.1)', borderRadius:10, background:'#fff', cursor:'pointer', color:'#1d1d1f'}}>
+                        {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
+                    <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', marginBottom:3}}>Sell Currency</div>
+                    <div style={{fontSize:10, color:'#86868b', marginBottom:12}}>Buy box, landed cost, FBA fees, profit</div>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <div style={{fontSize:28, fontWeight:700, color:'#34c759', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbaSellCurrency)}</div>
+                      <select value={fbaSellCurrency} onChange={e => handleCurrencyChange('fba','sell',e.target.value)}
+                        style={{flex:1, padding:'9px 12px', fontSize:13, fontWeight:600, border:'1px solid rgba(0,0,0,0.1)', borderRadius:10, background:'#fff', cursor:'pointer', color:'#1d1d1f'}}>
+                        {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* How It Works */}
+              <div style={{background:'#f5f5f7', borderRadius:14, padding:'16px 18px', marginBottom:16}}>
+                <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f', marginBottom:10}}>How It Works</div>
+                <div style={{fontSize:12, color:'#86868b', lineHeight:1.8}}>
+                  <div>FBM and FBA have <strong>independent currency settings</strong>. Changing one does not affect the other.</div>
+                  <div style={{marginTop:6}}>
+                    <span style={{color:'#34c759', fontWeight:600}}>Yes, convert</span> — Existing data converted using historical exchange rates per record date.
+                  </div>
+                  <div style={{marginTop:4}}>
+                    <span style={{color:'#0071e3', fontWeight:600}}>No, keep as-is</span> — Only new data going forward uses the new currency.
+                  </div>
+                </div>
+              </div>
+            </>}
+
+            {/* ── CURRENCY CONVERSION CONFIRMATION POPUP ── */}
+            {convertConfirm && <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.5)', zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}} onClick={() => !converting && setConvertConfirm(null)}>
+              <div style={{background:'#fff', borderRadius:18, padding:'28px 32px', maxWidth:460, width:'90%', boxShadow:'0 20px 60px rgba(0,0,0,0.2)', animation:'scaleIn 0.2s ease-out'}} onClick={e => e.stopPropagation()}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                  <span style={{background:convertConfirm.section==='fbm'?'#0071e3':'#ff9500', color:'#fff', fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:5}}>{convertConfirm.section.toUpperCase()}</span>
+                  <span style={{fontSize:17, fontWeight:700, color:'#1d1d1f', letterSpacing:'-0.02em'}}>Change {convertConfirm.type === 'buy' ? 'Buy' : 'Sell'} Currency</span>
+                </div>
+                <div style={{fontSize:13, color:'#86868b', marginBottom:20, lineHeight:1.6}}>
+                  You're changing from <strong style={{color:'#1d1d1f'}}>{convertConfirm.from}</strong> ({getCurrencySymbol(convertConfirm.from)}) to <strong style={{color:'#5856d6'}}>{convertConfirm.to}</strong> ({getCurrencySymbol(convertConfirm.to)})
+                </div>
+
+                <div style={{fontSize:14, fontWeight:600, color:'#1d1d1f', marginBottom:14}}>Convert existing {convertConfirm.section==='fbm'?'order':'product'} data?</div>
+
+                <div style={{display:'flex', flexDirection:'column', gap:10, marginBottom:20}}>
+                  <button disabled={converting} onClick={() => executeCurrencyChange(true)}
+                    style={{display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'rgba(52,199,89,0.08)', border:'1px solid rgba(52,199,89,0.2)', borderRadius:12, cursor:converting?'wait':'pointer', textAlign:'left', transition:'all 0.15s'}}>
+                    <div style={{width:36, height:36, borderRadius:10, background:'#34c759', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0}}>✓</div>
+                    <div>
+                      <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f'}}>Yes, convert all existing data</div>
+                      <div style={{fontSize:11, color:'#86868b', marginTop:2}}>Uses historical exchange rates per order date</div>
+                    </div>
+                  </button>
+
+                  <button disabled={converting} onClick={() => executeCurrencyChange(false)}
+                    style={{display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'rgba(0,113,227,0.06)', border:'1px solid rgba(0,113,227,0.15)', borderRadius:12, cursor:converting?'wait':'pointer', textAlign:'left', transition:'all 0.15s'}}>
+                    <div style={{width:36, height:36, borderRadius:10, background:'#0071e3', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0}}>→</div>
+                    <div>
+                      <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f'}}>No, only for new orders</div>
+                      <div style={{fontSize:11, color:'#86868b', marginTop:2}}>Existing orders keep current values, new ones use {getCurrencySymbol(convertConfirm.to)}{convertConfirm.to}</div>
+                    </div>
+                  </button>
+                </div>
+
+                {converting && <div style={{textAlign:'center', padding:'10px 0'}}>
+                  <div className="spin" style={{width:20, height:20, border:'2px solid #e0e0e0', borderTopColor:'#5856d6', borderRadius:'50%', display:'inline-block', marginBottom:6}}></div>
+                  <div style={{fontSize:12, color:'#86868b'}}>Converting orders using historical rates...</div>
+                </div>}
+
+                {!converting && <button onClick={() => setConvertConfirm(null)}
+                  style={{width:'100%', padding:'10px', background:'#f5f5f7', border:'none', borderRadius:10, fontSize:13, color:'#86868b', cursor:'pointer', fontWeight:500}}>
+                  Cancel
+                </button>}
+              </div>
+            </div>}
+
             {/* ── MANAGE RATES ── */}
             {section === 'rates' && <>
               <div style={{fontSize:15, fontWeight:700, color:'#1d1d1f', marginBottom:4, letterSpacing:'-0.01em'}}>Manage Rates</div>
@@ -3804,12 +4024,12 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
                   {[
                     {key:'fuelSurcharge', label:'Fuel Surcharge', suffix:'%', display: v => (v*100).toFixed(1), parse: v => parseFloat(v)/100, desc:'Added to base shipping'},
-                    {key:'dutyPerOrder', label:'Duty per Order', suffix:'£', desc:'Fixed duty charge'},
+                    {key:'dutyPerOrder', label:'Duty per Order', suffix:buySymbol(), desc:'Fixed duty charge'},
                     {key:'vatRate', label:'VAT Rate', suffix:'×', desc:'1.2 = 20% VAT'},
                     {key:'amazonFeeMultiplier', label:'Amazon Revenue Multiplier', suffix:'×', desc:'0.847 = 15.3% fee'},
                     {key:'costOverheadMultiplier', label:'Cost Overhead Multiplier', suffix:'×', desc:'1.1 = 10% overhead'},
-                    {key:'fixedOrderCost', label:'Fixed Order Cost', suffix:'$', desc:'Deducted from profit'},
-                    {key:'defaultGbpUsdRate', label:'Default GBP→USD Rate', suffix:'', desc:'Fallback exchange rate'},
+                    {key:'fixedOrderCost', label:'Fixed Order Cost', suffix:sellSymbol(), desc:'Deducted from profit'},
+                    {key:'defaultGbpUsdRate', label:'Default FBM Rate', suffix:'', desc:'Fallback exchange rate'},
                   ].map(f => (
                     <div key={f.key} style={{background:'#fff', borderRadius:10, padding:'10px 12px'}}>
                       <label style={{fontSize:11, color:'#86868b', fontWeight:500, display:'block', marginBottom:4}}>{f.label}</label>
@@ -3869,7 +4089,7 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
                               <input type="number" step="0.01" value={r.duty} onChange={e => updateRmRate(i,'duty',e.target.value)}
                                 style={{width:55, padding:'4px 6px', border:'1px solid #e0e0e0', borderRadius:6, fontSize:12, textAlign:'right', fontFamily:'IBM Plex Mono'}}/>
                             </td>
-                            <td style={{padding:'6px 8px', textAlign:'right', fontFamily:'IBM Plex Mono', fontWeight:600, color:'#0071e3'}}>£{sampleTotal.toFixed(2)}</td>
+                            <td style={{padding:'6px 8px', textAlign:'right', fontFamily:'IBM Plex Mono', fontWeight:600, color:'#0071e3'}}>{buySymbol()}{sampleTotal.toFixed(2)}</td>
                           </tr>
                         );
                       })}
@@ -3897,49 +4117,49 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser}) {
                 {
                   title: 'Total Buy Price (inc VAT)',
                   formula: 'Total Buy inc VAT = (Unit Price × Quantity) + Delivery Fee',
-                  example: `E.g. Unit=£10, Qty=2, Delivery=£5 → (10 × 2) + 5 = £25.00`,
+                  example: `E.g. Unit=${buySymbol()}10, Qty=2, Delivery=${buySymbol()}5 → (10 × 2) + 5 = ${buySymbol()}25.00`,
                   fields: ['Unit Buy Price', 'B-Qty (quantity)', 'Delivery Fee per Line'],
                   color: '#ff3b30',
                 },
                 {
                   title: 'Total Buy Price (exc VAT)',
                   formula: `Total Buy exc VAT = (Delivery Fee ÷ ${C.vatRate.toFixed(1)}) + IF(VAT=YES, (Unit × Qty) ÷ ${C.vatRate.toFixed(1)}, Unit × Qty)`,
-                  example: `VAT=YES: (5 ÷ ${C.vatRate}) + (20 ÷ ${C.vatRate}) = £${(5/C.vatRate + 20/C.vatRate).toFixed(2)}  |  VAT=NO: (5 ÷ ${C.vatRate}) + 20 = £${(5/C.vatRate + 20).toFixed(2)}`,
+                  example: `VAT=YES: (5 ÷ ${C.vatRate}) + (20 ÷ ${C.vatRate}) = ${buySymbol()}${(5/C.vatRate + 20/C.vatRate).toFixed(2)}  |  VAT=NO: (5 ÷ ${C.vatRate}) + 20 = ${buySymbol()}${(5/C.vatRate + 20).toFixed(2)}`,
                   fields: ['Delivery Fee', 'Unit Buy Price', 'B-Qty', 'VAT Status'],
                   color: '#ff9f0a',
                 },
                 {
                   title: 'Shipping Cost (Royal Mail)',
                   formula: 'Shipping = (Base Price + Per Kg × Weight) × (1 + Fuel Surcharge) + Duty',
-                  example: `E.g. 1.5kg: (£4.59 + £2.27 × 1.5) × ${(1+C.fuelSurcharge).toFixed(3)} + £${C.dutyPerOrder.toFixed(2)} = £${(((4.59 + 2.27*1.5) * (1+C.fuelSurcharge)) + C.dutyPerOrder).toFixed(2)}`,
+                  example: `E.g. 1.5kg: (${buySymbol()}4.59 + ${buySymbol()}2.27 × 1.5) × ${(1+C.fuelSurcharge).toFixed(3)} + ${buySymbol()}${C.dutyPerOrder.toFixed(2)} = ${buySymbol()}${(((4.59 + 2.27*1.5) * (1+C.fuelSurcharge)) + C.dutyPerOrder).toFixed(2)}`,
                   fields: ['Order Weight (kg)', 'RM Rate Card lookup'],
                   color: '#0071e3',
                 },
                 {
                   title: 'Revenue After Amazon Fees',
-                  formula: `Revenue USD = Sell Price × ${C.amazonFeeMultiplier} (Amazon takes ${((1-C.amazonFeeMultiplier)*100).toFixed(1)}%)`,
-                  example: `E.g. Sell=$50 → 50 × ${C.amazonFeeMultiplier} = $${(50*C.amazonFeeMultiplier).toFixed(2)}`,
-                  fields: ['Total Sell Price (USD)'],
+                  formula: `Revenue = Sell Price × ${C.amazonFeeMultiplier} (Amazon takes ${((1-C.amazonFeeMultiplier)*100).toFixed(1)}%)`,
+                  example: `E.g. Sell=${sellSymbol()}50 → 50 × ${C.amazonFeeMultiplier} = ${sellSymbol()}${(50*C.amazonFeeMultiplier).toFixed(2)}`,
+                  fields: ['Total Sell Price'],
                   color: '#34c759',
                 },
                 {
-                  title: 'Total Cost in USD',
-                  formula: `Cost USD = ((Buy exc VAT × ${C.costOverheadMultiplier}) + Shipping) × GBP→USD Rate`,
-                  example: `E.g. Buy=£20, Ship=£8, Rate=${C.defaultGbpUsdRate} → ((20 × ${C.costOverheadMultiplier}) + 8) × ${C.defaultGbpUsdRate} = $${((20*C.costOverheadMultiplier + 8) * C.defaultGbpUsdRate).toFixed(2)}`,
-                  fields: ['Total Buy exc VAT', 'Shipping GBP', 'GBP→USD Rate'],
+                  title: 'Total Cost in Sell Currency',
+                  formula: `Cost = ((Buy exc VAT × ${C.costOverheadMultiplier}) + Shipping) × ${window.APP_CURRENCIES.fbm.buy}→${window.APP_CURRENCIES.fbm.sell} Rate`,
+                  example: `E.g. Buy=${buySymbol()}20, Ship=${buySymbol()}8, Rate=${C.defaultGbpUsdRate} → ((20 × ${C.costOverheadMultiplier}) + 8) × ${C.defaultGbpUsdRate} = ${sellSymbol()}${((20*C.costOverheadMultiplier + 8) * C.defaultGbpUsdRate).toFixed(2)}`,
+                  fields: ['Total Buy exc VAT', 'Shipping', 'Exchange Rate'],
                   color: '#ff9f0a',
                 },
                 {
                   title: 'Expected Profit',
-                  formula: `Profit = Revenue USD − Cost USD − $${C.fixedOrderCost.toFixed(0)} (fixed cost)`,
-                  example: `E.g. Rev=$42.35, Cost=$38.50 → 42.35 − 38.50 − ${C.fixedOrderCost} = $${(42.35 - 38.50 - C.fixedOrderCost).toFixed(2)}`,
-                  fields: ['Revenue USD', 'Cost USD', 'Fixed Order Cost'],
+                  formula: `Profit = Revenue − Cost − ${sellSymbol()}${C.fixedOrderCost.toFixed(0)} (fixed cost)`,
+                  example: `E.g. Rev=${sellSymbol()}42.35, Cost=${sellSymbol()}38.50 → 42.35 − 38.50 − ${C.fixedOrderCost} = ${sellSymbol()}${(42.35 - 38.50 - C.fixedOrderCost).toFixed(2)}`,
+                  fields: ['Revenue', 'Cost', 'Fixed Order Cost'],
                   color: '#34c759',
                 },
                 {
                   title: 'Profit Margin %',
                   formula: 'Margin = (Expected Profit ÷ Sell Price) × 100',
-                  example: `E.g. Profit=$1.85, Sell=$50 → (1.85 ÷ 50) × 100 = 3.7%`,
+                  example: `E.g. Profit=${sellSymbol()}1.85, Sell=${sellSymbol()}50 → (1.85 ÷ 50) × 100 = 3.7%`,
                   fields: ['Expected Profit', 'Total Sell Price'],
                   color: '#0071e3',
                 },
@@ -4656,9 +4876,9 @@ function OperationsTable({orders,setOrders,role,syncCell,createMultiPO,getCombin
         <input type="number" step="0.01" min="0" key={`w-${order.id}-${order.weight}`} defaultValue={order.weight??''} onClick={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();}} onBlur={e=>{handleWeightChange(order, e.target.value);}} style={{width:55,background:'#f5f5f7',border:'1px solid #d2d2d7',borderRadius:5,color:order.weight!=null?'#0071e3':'#86868b',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}} placeholder="kg"/>
         {order.suggestedWeight!=null&&<div style={{fontSize:7,color:'#86868b',whiteSpace:'nowrap'}} title="Suggested weight from sheet">~{Number(order.suggestedWeight).toFixed(2)}kg</div>}
       </div>;
-      case 'buyExcVAT': return <span style={{fontFamily:'IBM Plex Mono',color:'#fbbf24',fontWeight:700,fontSize:11}}>{order.totalBuyPriceExcVAT!=null?`£${Number(order.totalBuyPriceExcVAT).toFixed(2)}`:'—'}</span>;
+      case 'buyExcVAT': return <span style={{fontFamily:'IBM Plex Mono',color:'#fbbf24',fontWeight:700,fontSize:11}}>{order.totalBuyPriceExcVAT!=null?`${buySymbol()}${Number(order.totalBuyPriceExcVAT).toFixed(2)}`:'—'}</span>;
       case 'hts': return <span style={{fontFamily:'IBM Plex Mono',color:'#a78bfa',fontSize:9}}>{order.htsCode||'—'}</span>;
-      case 'profit': return <span style={{fontFamily:'IBM Plex Mono',fontSize:11,color:order.expectedProfit!=null?(Number(order.expectedProfit)>=0?'#22c55e':'#ef4444'):'#86868b'}}>{order.expectedProfit!=null?`$${Number(order.expectedProfit).toFixed(2)}`:'—'}</span>;
+      case 'profit': return <span style={{fontFamily:'IBM Plex Mono',fontSize:11,color:order.expectedProfit!=null?(Number(order.expectedProfit)>=0?'#22c55e':'#ef4444'):'#86868b'}}>{order.expectedProfit!=null?`${sellSymbol()}${Number(order.expectedProfit).toFixed(2)}`:'—'}</span>;
       case 'qtyRcvd': return <input type="number" min="0" key={`qr-${order.id}-${order.qtyReceived}`} defaultValue={order.qtyReceived??''} onClick={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();}} onBlur={e=>{handleQtyReceivedChange(order, e.target.value);}} style={{width:50,background:'#f5f5f7',border:'1px solid #d2d2d7',borderRadius:5,color:order.qtyReceived!=null&&order.bQty!=null&&Number(order.qtyReceived)!==Number(order.bQty)?'#ef4444':'#22c55e',textAlign:'center',padding:'4px',fontSize:11,fontFamily:'IBM Plex Mono'}}/>;
       case 'disc': return <span style={{fontFamily:'IBM Plex Mono',color:order.discrepancy!=null&&Number(order.discrepancy)!==0?'#ef4444':'#86868b',fontWeight:order.discrepancy!=null&&Number(order.discrepancy)!==0?800:400,fontSize:11}}>{order.discrepancy!=null&&Number(order.discrepancy)!==0?Number(order.discrepancy):'—'}</span>;
       case 'label': return <button onClick={async e=>{e.stopPropagation();await handleLabelToggle(order);}} style={{background:order.labelPrinted?'rgba(34,197,94,0.18)':'#f5f5f7',border:`1px solid ${order.labelPrinted?'#22c55e40':'#d2d2d7'}`,color:order.labelPrinted?'#22c55e':'#6e6e73',borderRadius:6,padding:'3px 9px',cursor:'pointer',fontSize:13,fontWeight:700}}>
@@ -5023,7 +5243,7 @@ function MultiPOModal({order, suppliers, onClose, onCreate, getCombinedDiscrepan
                     <input type="checkbox" checked={incVAT} onChange={e=>setIncVAT(e.target.checked)} style={{cursor:'pointer'}}/>
                     Including VAT
                   </label>
-                  <div style={{padding:10,background:'rgba(255,255,255,0.02)',borderRadius:8,fontSize:10,color:'#86868b'}}>Total: £{(parseFloat(buyPrice||0)*discrepancy).toFixed(2)}</div>
+                  <div style={{padding:10,background:'rgba(255,255,255,0.02)',borderRadius:8,fontSize:10,color:'#86868b'}}>Total: {buySymbol()}{(parseFloat(buyPrice||0)*discrepancy).toFixed(2)}</div>
                 </div>
               </div>
 
@@ -5508,9 +5728,9 @@ function FBAExpenseApproval({currentUser,role}) {
               <div><span style={{color:'#86868b'}}>Product:</span> {lookupResult.product_name||'—'}</div>
               <div><span style={{color:'#86868b'}}>Sourced by:</span> <span style={{color:'#0071e3',fontWeight:600}}>{(lookupResult.owner_email||'').split('@')[0]}</span></div>
               <div><span style={{color:'#86868b'}}>Supplier:</span> {lookupResult.supplier_name||'—'}</div>
-              <div><span style={{color:'#86868b'}}>Buy £/unit:</span> <span style={{fontWeight:600}}>£{lookupResult.buy_price_ex_vat||'—'}</span></div>
-              <div><span style={{color:'#86868b'}}>Buy Box $:</span> ${lookupResult.buy_box_price||'—'}</div>
-              <div><span style={{color:'#86868b'}}>Profit/unit:</span> ${lookupResult.profit_per_unit||'—'}</div>
+              <div><span style={{color:'#86868b'}}>Buy {fbaBuySymbol()}/unit:</span> <span style={{fontWeight:600}}>{fbaBuySymbol()}{lookupResult.buy_price_ex_vat||'—'}</span></div>
+              <div><span style={{color:'#86868b'}}>Buy Box {fbaSellSymbol()}:</span> {fbaSellSymbol()}{lookupResult.buy_box_price||'—'}</div>
+              <div><span style={{color:'#86868b'}}>Profit/unit:</span> {fbaSellSymbol()}{lookupResult.profit_per_unit||'—'}</div>
               <div><span style={{color:'#86868b'}}>ROI:</span> {lookupResult.roi||'—'}%</div>
               {lookupResult.supplier_url&&<div><span style={{color:'#86868b'}}>Supplier:</span> <a href={lookupResult.supplier_url} target="_blank" rel="noopener noreferrer" style={{color:'#0071e3',fontSize:11}}>Link</a></div>}
             </div>
@@ -5524,7 +5744,7 @@ function FBAExpenseApproval({currentUser,role}) {
               </div>
               <div>
                 <div style={{fontSize:11,color:'#86868b',marginBottom:4}}>Total cost</div>
-                <div style={{fontSize:16,fontWeight:700,color:'#0071e3'}}>£{(qtyInput*(parseFloat(lookupResult.buy_price_ex_vat)||0)).toFixed(2)}</div>
+                <div style={{fontSize:16,fontWeight:700,color:'#0071e3'}}>{fbaBuySymbol()}{(qtyInput*(parseFloat(lookupResult.buy_price_ex_vat)||0)).toFixed(2)}</div>
               </div>
             </div>
 
@@ -5558,8 +5778,8 @@ function FBAExpenseApproval({currentUser,role}) {
                 <th style={{padding:'8px 10px',textAlign:'left',fontWeight:600,fontSize:11}}>Sourced By</th>
                 <th style={{padding:'8px 10px',textAlign:'left',fontWeight:600,fontSize:11}}>Supplier</th>
                 <th style={{padding:'8px 10px',textAlign:'right',fontWeight:600,fontSize:11}}>Qty</th>
-                <th style={{padding:'8px 10px',textAlign:'right',fontWeight:600,fontSize:11}}>Buy £/unit</th>
-                <th style={{padding:'8px 10px',textAlign:'right',fontWeight:600,fontSize:11}}>Total £</th>
+                <th style={{padding:'8px 10px',textAlign:'right',fontWeight:600,fontSize:11}}>Buy {fbaBuySymbol()}/unit</th>
+                <th style={{padding:'8px 10px',textAlign:'right',fontWeight:600,fontSize:11}}>Total {fbaBuySymbol()}</th>
                 <th style={{padding:'8px 10px',textAlign:'right',fontWeight:600,fontSize:11}}>ROI %</th>
                 <th style={{padding:'8px 10px',textAlign:'center',fontWeight:600,fontSize:11}}>Status</th>
                 <th style={{padding:'8px 10px',textAlign:'left',fontWeight:600,fontSize:11}}>STB / PO</th>
@@ -5574,8 +5794,8 @@ function FBAExpenseApproval({currentUser,role}) {
                   <td style={{padding:'7px 10px',color:'#0071e3'}}>{(a.sourced_by||'').split('@')[0]}</td>
                   <td style={{padding:'7px 10px'}}>{a.supplier_name||'—'}</td>
                   <td style={{padding:'7px 10px',textAlign:'right'}}>{a.qty}</td>
-                  <td style={{padding:'7px 10px',textAlign:'right'}}>£{a.buy_price_ex_vat||'—'}</td>
-                  <td style={{padding:'7px 10px',textAlign:'right',fontWeight:600}}>£{a.total_buy_price?Number(a.total_buy_price).toFixed(2):'—'}</td>
+                  <td style={{padding:'7px 10px',textAlign:'right'}}>{fbaBuySymbol()}{a.buy_price_ex_vat||'—'}</td>
+                  <td style={{padding:'7px 10px',textAlign:'right',fontWeight:600}}>{fbaBuySymbol()}{a.total_buy_price?Number(a.total_buy_price).toFixed(2):'—'}</td>
                   <td style={{padding:'7px 10px',textAlign:'right',color:Number(a.roi)>20?'#34c759':'#ff9f0a'}}>{a.roi?Number(a.roi).toFixed(1)+'%':'—'}</td>
                   <td style={{padding:'7px 10px',textAlign:'center'}}>
                     <span style={{padding:'3px 10px',borderRadius:12,background:statusColor(a.purchase_made?'purchased':a.approval_status)+'18',color:statusColor(a.purchase_made?'purchased':a.approval_status),fontSize:11,fontWeight:600}}>
@@ -5639,8 +5859,8 @@ function FBAPurchaseModal({approval,onPurchase,onClose}) {
 
         <div style={{padding:14,background:'#f0f8ff',borderRadius:10,marginBottom:16,fontSize:13}}>
           <div><b>Qty:</b> {approval.qty} units</div>
-          <div><b>Unit price:</b> £{approval.buy_price_ex_vat}</div>
-          <div><b>Expected total:</b> <span style={{fontWeight:700,color:'#0071e3'}}>£{expectedTotal.toFixed(2)}</span></div>
+          <div><b>Unit price:</b> {fbaBuySymbol()}{approval.buy_price_ex_vat}</div>
+          <div><b>Expected total:</b> <span style={{fontWeight:700,color:'#0071e3'}}>{fbaBuySymbol()}{expectedTotal.toFixed(2)}</span></div>
         </div>
 
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -5665,7 +5885,7 @@ function FBAPurchaseModal({approval,onPurchase,onClose}) {
             <label style={{fontSize:12,color:'#86868b',display:'block',marginBottom:4}}>Verified Cart Total (must match expected)</label>
             <input type="number" step="0.01" value={verifiedTotal} onChange={e=>setVerifiedTotal(e.target.value)}
               style={{width:'100%',padding:'8px 12px',border:`1px solid ${totalMatch?'#34c759':'#ff3b30'}`,borderRadius:8,fontSize:13,boxSizing:'border-box'}}/>
-            {!totalMatch&&verifiedTotal&&<div style={{fontSize:11,color:'#ff3b30',marginTop:4}}>⚠️ Total doesn't match expected £{expectedTotal.toFixed(2)}</div>}
+            {!totalMatch&&verifiedTotal&&<div style={{fontSize:11,color:'#ff3b30',marginTop:4}}>Warning: Total doesn't match expected {fbaBuySymbol()}{expectedTotal.toFixed(2)}</div>}
             {totalMatch&&verifiedTotal&&<div style={{fontSize:11,color:'#34c759',marginTop:4}}>✅ Total matches!</div>}
           </div>
         </div>
@@ -6046,6 +6266,14 @@ function App() {
           const data = await res.json();
           if (data.rm_rates?.value) window.APP_RATES.rmRates = data.rm_rates.value;
           if (data.calc_constants?.value) window.APP_RATES.calc = data.calc_constants.value;
+          // FBM currencies (with backward compat for old buy_currency/sell_currency keys)
+          const fbmBuy = data.fbm_buy_currency?.value || data.buy_currency?.value;
+          const fbmSell = data.fbm_sell_currency?.value || data.sell_currency?.value;
+          if (fbmBuy) window.APP_CURRENCIES.fbm.buy = fbmBuy;
+          if (fbmSell) window.APP_CURRENCIES.fbm.sell = fbmSell;
+          // FBA currencies
+          if (data.fba_buy_currency?.value) window.APP_CURRENCIES.fba.buy = data.fba_buy_currency.value;
+          if (data.fba_sell_currency?.value) window.APP_CURRENCIES.fba.sell = data.fba_sell_currency.value;
           console.log('⚙️ Settings loaded from DB');
         }
       } catch(e) { console.warn('Settings load skipped:', e.message); }
@@ -6515,7 +6743,7 @@ function App() {
       </div>
 
       {showUsers&&ri.canManage&&<UserManageModal accounts={accounts} onSave={a=>{setAccounts(a);localStorage.setItem('fbm_accounts',JSON.stringify(a));fetch(API.syncAccounts(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':currentUser?.email||'unknown'},body:JSON.stringify({accounts:a})}).catch(err=>console.warn('Account sync failed:',err.message));}} onClose={()=>setShowUsers(false)}/>}
-      {showSettings&&ri.canManage&&<SettingsModal accounts={accounts} currentUser={currentUser} onSaveAccounts={a=>{setAccounts(a);localStorage.setItem('fbm_accounts',JSON.stringify(a));fetch(API.syncAccounts(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':currentUser?.email||'unknown'},body:JSON.stringify({accounts:a})}).catch(err=>console.warn('Account sync failed:',err.message));}} onClose={()=>setShowSettings(false)}/>}
+      {showSettings&&ri.canManage&&<SettingsModal accounts={accounts} currentUser={currentUser} onSaveAccounts={a=>{setAccounts(a);localStorage.setItem('fbm_accounts',JSON.stringify(a));fetch(API.syncAccounts(),{method:'POST',headers:{'Content-Type':'application/json','x-user-email':currentUser?.email||'unknown'},body:JSON.stringify({accounts:a})}).catch(err=>console.warn('Account sync failed:',err.message));}} onClose={()=>setShowSettings(false)} onCurrencyChanged={loadOrders}/>}
       {showMultiPOModal&&<MultiPOModal order={showMultiPOModal} onClose={()=>setShowMultiPOModal(null)} onCreate={createMultiPO} getCombinedDiscrepancy={getCombinedDiscrepancy}/>}
     </div>
   );
