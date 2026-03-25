@@ -201,12 +201,30 @@ tr.datarow:active td { background: rgba(0,0,0,0.03); }
   .modal-box table th, .modal-box table td { padding: 6px 8px; }
   .hide-mobile { display: none !important; }
   .modal-box > div:has(.settings-sidebar) { flex-direction: column !important; height: auto !important; }
-  .settings-sidebar { width: 100% !important; height: 48px !important; padding: 0 !important; border-right: none !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; display: flex !important; flex-direction: row !important; justify-content: space-around !important; align-items: center !important; overflow: visible !important; flex-wrap: nowrap !important; }
-  .settings-sidebar button { flex: 1 1 25% !important; padding: 12px 4px !important; font-size: 11px !important; font-weight: 600 !important; border: none !important; border-radius: 0 !important; border-bottom: 3px solid transparent !important; background: transparent !important; color: #86868b !important; margin: 0 !important; white-space: nowrap !important; text-overflow: ellipsis !important; overflow: hidden !important; height: 48px !important; display: flex !important; align-items: center !important; justify-content: center !important; }
+  .settings-sidebar { width: 100% !important; height: auto !important; min-height: 44px !important; padding: 0 4px !important; border-right: none !important; border-bottom: 1px solid rgba(0,0,0,0.06) !important; display: flex !important; flex-direction: row !important; justify-content: stretch !important; align-items: stretch !important; overflow-x: auto !important; overflow-y: hidden !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch !important; gap: 0 !important; }
+  .settings-sidebar button { flex: 1 1 0 !important; min-width: 0 !important; padding: 10px 6px !important; font-size: 10px !important; font-weight: 600 !important; border: none !important; border-radius: 0 !important; border-bottom: 3px solid transparent !important; background: transparent !important; color: #86868b !important; margin: 0 !important; white-space: nowrap !important; text-overflow: ellipsis !important; overflow: hidden !important; height: 44px !important; display: flex !important; align-items: center !important; justify-content: center !important; }
   .settings-sidebar button:hover { background: rgba(0,0,0,0.05) !important; }
+  .settings-sidebar button.active { border-bottom-color: #0071e3 !important; color: #1d1d1f !important; font-weight: 700 !important; }
   .settings-sidebar button span { display: none !important; }
-  .modal-box > div:has(.settings-sidebar) > div:last-child { width: 100% !important; max-height: calc(85vh - 48px) !important; padding: 12px 10px !important; overflow-y: auto !important; }
+  .modal-box > div:has(.settings-sidebar) > div:last-child { width: 100% !important; max-height: calc(85vh - 52px) !important; padding: 14px 12px !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
   .modal-box { max-height: 85vh !important; }
+  /* Settings currency cards stack */
+  .settings-currency-row { flex-direction: column !important; gap: 10px !important; }
+  .settings-currency-card { flex: 1 1 auto !important; min-width: 0 !important; padding: 14px !important; }
+  .settings-currency-card select { font-size: 12px !important; padding: 8px 10px !important; }
+  .settings-currency-card .currency-big { font-size: 24px !important; min-width: 36px !important; }
+  /* Settings general constants single column */
+  .settings-constants-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
+  /* Settings RM rate card responsive inputs */
+  .settings-rm-table input { width: 52px !important; font-size: 11px !important; padding: 3px 4px !important; }
+  .settings-rm-table th, .settings-rm-table td { padding: 4px 3px !important; font-size: 10px !important; }
+  /* Settings formula cards */
+  .settings-formula-card { padding: 12px 14px !important; }
+  .settings-formula-card code { font-size: 10px !important; word-break: break-all !important; }
+  /* Confirm popup mobile */
+  .settings-confirm-popup { padding: 20px 18px !important; }
+  .settings-confirm-popup .confirm-btn { padding: 12px 12px !important; }
+  .settings-confirm-popup .confirm-btn .confirm-icon { width: 30px !important; height: 30px !important; font-size: 15px !important; }
 }
 
 /* ═══ SECTION TITLE ═══ */
@@ -3866,7 +3884,7 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurren
           {/* Sidebar - becomes horizontal tabs on mobile */}
           <div style={{width:200, borderRight:'1px solid rgba(0,0,0,0.06)', padding:'12px 8px', background:'#fafafa', flexShrink:0, overflowY:'auto'}} className="settings-sidebar">
             {SECTIONS.map(s => (
-              <button key={s.key} onClick={() => setSection(s.key)} style={{
+              <button key={s.key} onClick={() => setSection(s.key)} className={section===s.key ? 'active' : ''} style={{
                 display:'flex', alignItems:'center', gap:8, width:'100%', padding:'10px 12px', border:'none',
                 borderRadius:10, fontSize:13, fontWeight:section===s.key?600:400, cursor:'pointer', marginBottom:2,
                 background:section===s.key?'#fff':'transparent', color:section===s.key?s.color:'#86868b',
@@ -3895,23 +3913,23 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurren
                   <span style={{background:'#0071e3', color:'#fff', fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:6, letterSpacing:'0.04em'}}>FBM</span>
                   <span style={{fontSize:13, fontWeight:600, color:'#1d1d1f'}}>Fulfilment by Merchant</span>
                 </div>
-                <div style={{display:'flex', gap:14, flexWrap:'wrap'}}>
-                  <div style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
+                <div className="settings-currency-row" style={{display:'flex', gap:14, flexWrap:'wrap'}}>
+                  <div className="settings-currency-card" style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
                     <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', marginBottom:3}}>Buy Currency</div>
                     <div style={{fontSize:10, color:'#86868b', marginBottom:12}}>Unit buy price, delivery fees, shipping, VAT</div>
                     <div style={{display:'flex', alignItems:'center', gap:8}}>
-                      <div style={{fontSize:28, fontWeight:700, color:'#5856d6', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbmBuyCurrency)}</div>
+                      <div className="currency-big" style={{fontSize:28, fontWeight:700, color:'#5856d6', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbmBuyCurrency)}</div>
                       <select value={fbmBuyCurrency} onChange={e => handleCurrencyChange('fbm','buy',e.target.value)}
                         style={{flex:1, padding:'9px 12px', fontSize:13, fontWeight:600, border:'1px solid rgba(0,0,0,0.1)', borderRadius:10, background:'#fff', cursor:'pointer', color:'#1d1d1f'}}>
                         {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>)}
                       </select>
                     </div>
                   </div>
-                  <div style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
+                  <div className="settings-currency-card" style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
                     <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', marginBottom:3}}>Sell Currency</div>
                     <div style={{fontSize:10, color:'#86868b', marginBottom:12}}>Sell price, revenue, profit calculations</div>
                     <div style={{display:'flex', alignItems:'center', gap:8}}>
-                      <div style={{fontSize:28, fontWeight:700, color:'#34c759', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbmSellCurrency)}</div>
+                      <div className="currency-big" style={{fontSize:28, fontWeight:700, color:'#34c759', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbmSellCurrency)}</div>
                       <select value={fbmSellCurrency} onChange={e => handleCurrencyChange('fbm','sell',e.target.value)}
                         style={{flex:1, padding:'9px 12px', fontSize:13, fontWeight:600, border:'1px solid rgba(0,0,0,0.1)', borderRadius:10, background:'#fff', cursor:'pointer', color:'#1d1d1f'}}>
                         {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>)}
@@ -3927,23 +3945,23 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurren
                   <span style={{background:'#ff9500', color:'#fff', fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:6, letterSpacing:'0.04em'}}>FBA</span>
                   <span style={{fontSize:13, fontWeight:600, color:'#1d1d1f'}}>Fulfilment by Amazon</span>
                 </div>
-                <div style={{display:'flex', gap:14, flexWrap:'wrap'}}>
-                  <div style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
+                <div className="settings-currency-row" style={{display:'flex', gap:14, flexWrap:'wrap'}}>
+                  <div className="settings-currency-card" style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
                     <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', marginBottom:3}}>Buy Currency</div>
                     <div style={{fontSize:10, color:'#86868b', marginBottom:12}}>Supplier cost, freight, buy price ex/inc VAT</div>
                     <div style={{display:'flex', alignItems:'center', gap:8}}>
-                      <div style={{fontSize:28, fontWeight:700, color:'#5856d6', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbaBuyCurrency)}</div>
+                      <div className="currency-big" style={{fontSize:28, fontWeight:700, color:'#5856d6', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbaBuyCurrency)}</div>
                       <select value={fbaBuyCurrency} onChange={e => handleCurrencyChange('fba','buy',e.target.value)}
                         style={{flex:1, padding:'9px 12px', fontSize:13, fontWeight:600, border:'1px solid rgba(0,0,0,0.1)', borderRadius:10, background:'#fff', cursor:'pointer', color:'#1d1d1f'}}>
                         {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>)}
                       </select>
                     </div>
                   </div>
-                  <div style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
+                  <div className="settings-currency-card" style={{flex:'1 1 260px', background:'#f5f5f7', borderRadius:14, padding:'18px'}}>
                     <div style={{fontSize:12, fontWeight:600, color:'#1d1d1f', marginBottom:3}}>Sell Currency</div>
                     <div style={{fontSize:10, color:'#86868b', marginBottom:12}}>Buy box, landed cost, FBA fees, profit</div>
                     <div style={{display:'flex', alignItems:'center', gap:8}}>
-                      <div style={{fontSize:28, fontWeight:700, color:'#34c759', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbaSellCurrency)}</div>
+                      <div className="currency-big" style={{fontSize:28, fontWeight:700, color:'#34c759', fontFamily:'IBM Plex Mono', minWidth:42, textAlign:'center'}}>{getCurrencySymbol(fbaSellCurrency)}</div>
                       <select value={fbaSellCurrency} onChange={e => handleCurrencyChange('fba','sell',e.target.value)}
                         style={{flex:1, padding:'9px 12px', fontSize:13, fontWeight:600, border:'1px solid rgba(0,0,0,0.1)', borderRadius:10, background:'#fff', cursor:'pointer', color:'#1d1d1f'}}>
                         {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>)}
@@ -3970,7 +3988,7 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurren
 
             {/* ── CURRENCY CONVERSION CONFIRMATION POPUP ── */}
             {convertConfirm && <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.5)', zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center'}} onClick={() => !converting && setConvertConfirm(null)}>
-              <div style={{background:'#fff', borderRadius:18, padding:'28px 32px', maxWidth:460, width:'90%', boxShadow:'0 20px 60px rgba(0,0,0,0.2)', animation:'scaleIn 0.2s ease-out'}} onClick={e => e.stopPropagation()}>
+              <div className="settings-confirm-popup" style={{background:'#fff', borderRadius:18, padding:'28px 32px', maxWidth:460, width:'90%', boxShadow:'0 20px 60px rgba(0,0,0,0.2)', animation:'scaleIn 0.2s ease-out'}} onClick={e => e.stopPropagation()}>
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
                   <span style={{background:convertConfirm.section==='fbm'?'#0071e3':'#ff9500', color:'#fff', fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:5}}>{convertConfirm.section.toUpperCase()}</span>
                   <span style={{fontSize:17, fontWeight:700, color:'#1d1d1f', letterSpacing:'-0.02em'}}>Change {convertConfirm.type === 'buy' ? 'Buy' : 'Sell'} Currency</span>
@@ -3983,8 +4001,8 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurren
 
                 <div style={{display:'flex', flexDirection:'column', gap:10, marginBottom:20}}>
                   <button disabled={converting} onClick={() => executeCurrencyChange(true)}
-                    style={{display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'rgba(52,199,89,0.08)', border:'1px solid rgba(52,199,89,0.2)', borderRadius:12, cursor:converting?'wait':'pointer', textAlign:'left', transition:'all 0.15s'}}>
-                    <div style={{width:36, height:36, borderRadius:10, background:'#34c759', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0}}>✓</div>
+                    className="confirm-btn" style={{display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'rgba(52,199,89,0.08)', border:'1px solid rgba(52,199,89,0.2)', borderRadius:12, cursor:converting?'wait':'pointer', textAlign:'left', transition:'all 0.15s'}}>
+                    <div className="confirm-icon" style={{width:36, height:36, borderRadius:10, background:'#34c759', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0}}>✓</div>
                     <div>
                       <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f'}}>Yes, convert all existing data</div>
                       <div style={{fontSize:11, color:'#86868b', marginTop:2}}>Uses historical exchange rates per order date</div>
@@ -3992,8 +4010,8 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurren
                   </button>
 
                   <button disabled={converting} onClick={() => executeCurrencyChange(false)}
-                    style={{display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'rgba(0,113,227,0.06)', border:'1px solid rgba(0,113,227,0.15)', borderRadius:12, cursor:converting?'wait':'pointer', textAlign:'left', transition:'all 0.15s'}}>
-                    <div style={{width:36, height:36, borderRadius:10, background:'#0071e3', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0}}>→</div>
+                    className="confirm-btn" style={{display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:'rgba(0,113,227,0.06)', border:'1px solid rgba(0,113,227,0.15)', borderRadius:12, cursor:converting?'wait':'pointer', textAlign:'left', transition:'all 0.15s'}}>
+                    <div className="confirm-icon" style={{width:36, height:36, borderRadius:10, background:'#0071e3', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, flexShrink:0}}>→</div>
                     <div>
                       <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f'}}>No, only for new orders</div>
                       <div style={{fontSize:11, color:'#86868b', marginTop:2}}>Existing orders keep current values, new ones use {getCurrencySymbol(convertConfirm.to)}{convertConfirm.to}</div>
@@ -4021,7 +4039,7 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurren
               {/* Calculation Constants */}
               <div style={{background:'#f5f5f7', borderRadius:14, padding:'16px 18px', marginBottom:20}}>
                 <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f', marginBottom:14}}>General Constants</div>
-                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
+                <div className="settings-constants-grid" style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12}}>
                   {[
                     {key:'fuelSurcharge', label:'Fuel Surcharge', suffix:'%', display: v => (v*100).toFixed(1), parse: v => parseFloat(v)/100, desc:'Added to base shipping'},
                     {key:'dutyPerOrder', label:'Duty per Order', suffix:buySymbol(), desc:'Fixed duty charge'},
@@ -4054,7 +4072,7 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurren
               {/* Royal Mail Rate Card */}
               <div style={{background:'#f5f5f7', borderRadius:14, padding:'16px 18px'}}>
                 <div style={{fontSize:13, fontWeight:600, color:'#1d1d1f', marginBottom:14}}>Royal Mail UKUS Rate Card</div>
-                <div style={{overflowX:'auto'}}>
+                <div className="settings-rm-table" style={{overflowX:'auto'}}>
                   <table style={{width:'100%', fontSize:12, borderCollapse:'collapse'}}>
                     <thead>
                       <tr style={{borderBottom:'2px solid rgba(0,0,0,0.1)'}}>
@@ -4164,7 +4182,7 @@ function SettingsModal({accounts, onSaveAccounts, onClose, currentUser, onCurren
                   color: '#0071e3',
                 },
               ].map((f, i) => (
-                <div key={i} style={{background:'#f5f5f7', borderRadius:14, padding:'16px 18px', marginBottom:12}}>
+                <div key={i} className="settings-formula-card" style={{background:'#f5f5f7', borderRadius:14, padding:'16px 18px', marginBottom:12}}>
                   <div style={{fontSize:14, fontWeight:700, color:'#1d1d1f', marginBottom:8}}>{f.title}</div>
                   <div style={{background:'#fff', borderRadius:10, padding:'12px 14px', marginBottom:8, border:'1px solid rgba(0,0,0,0.04)'}}>
                     <div style={{fontFamily:'IBM Plex Mono', fontSize:12, color:f.color, fontWeight:600, lineHeight:1.6, wordBreak:'break-all'}}>{f.formula}</div>
